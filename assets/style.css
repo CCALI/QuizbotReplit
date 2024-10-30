@@ -1,0 +1,33 @@
+/* Custom styling for the QuizBot application */
+.stButton>button {
+    background-color: #841617;
+    color: white;
+    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    border: none;
+}
+
+.stButton>button:hover {
+    background-color: #6a1112;
+}
+
+.chat-message {
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+}
+
+.user-message {
+    background-color: #F0ECE2;
+}
+
+.bot-message {
+    background-color: #f8f5f0;
+}
+
+.file-uploader {
+    border: 2px dashed #841617;
+    border-radius: 4px;
+    padding: 1rem;
+    text-align: center;
+}
