@@ -9,7 +9,8 @@ class OpenAIService:
         prompt = f"Generate 3 Socratic questions based on this text: {text}"
         response = self.client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "text"}
         )
         return response.choices[0].message.content.split('\n')
 
@@ -22,6 +23,7 @@ class OpenAIService:
         
         response = self.client.chat.completions.create(
             model="gpt-4o",
-            messages=messages
+            messages=messages,
+            response_format={"type": "text"}
         )
         return response.choices[0].message.content
