@@ -123,15 +123,23 @@ class PDFService:
 
     def extract_text_with_formatting(self, folder_path: str) -> tuple:
         """Extract text from all PDFs in the folder while preserving formatting"""
-        all_text = []
-        all_tables = []
-        all_images = []
-        all_footnotes = {}
-        
         try:
+            if not os.path.exists(folder_path):
+                st.error(f"Readings folder not found: {folder_path}")
+                return "", [], [], {}
+                
             pdf_files = [f for f in os.listdir(folder_path) if f.endswith('.pdf')]
             if not pdf_files:
+                st.warning("No PDF files found in Readings folder")
                 return "", [], [], {}
+                
+            # Log found files
+            st.debug(f"Found PDF files: {pdf_files}")
+            
+            all_text = []
+            all_tables = []
+            all_images = []
+            all_footnotes = {}
             
             for filename in pdf_files:
                 file_path = os.path.join(folder_path, filename)
@@ -153,14 +161,22 @@ class PDFService:
                         f"{filename}:{k}": v for k, v in footnotes.items()
                     })
                     
+                    st.debug(f"Successfully processed {filename}")
+                    
                 except Exception as e:
                     st.warning(f"Error processing {filename}: {str(e)}")
+                    st.debug(f"Full error details for {filename}: {repr(e)}")
                     continue
             
+            if not all_text:
+                st.warning("No text could be extracted from any PDF files")
+                return "", [], [], {}
+                
             return '\n'.join(all_text), all_tables, all_images, all_footnotes
             
         except Exception as e:
             st.error(f"Error accessing folder {folder_path}: {str(e)}")
+            st.debug(f"Full error details: {repr(e)}")
             return "", [], [], {}
 
     def _extract_single_pdf(self, pdf_path: str) -> tuple:

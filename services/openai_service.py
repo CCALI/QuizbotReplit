@@ -21,20 +21,64 @@ class OpenAIService:
 
     def generate_summary(self, text: str) -> str:
         try:
-            response = self._make_api_call_with_retry(
-                self.client.chat.completions.create,
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "Generate a concise summary of the following text, focusing on key concepts and main ideas:"},
-                    {"role": "user", "content": text}
-                ],
-                response_format={"type": "text"},
-                timeout=self.timeout
-            )
-            return response.choices[0].message.content
+            # Add logging for text length
+            st.debug(f"Attempting to summarize text of length: {len(text)}")
+            
+            # Break text into smaller chunks if too long
+            max_tokens = 4000
+            if len(text) > max_tokens * 4:  # Approximate chars to tokens
+                chunks = [text[i:i+max_tokens*4] for i in range(0, len(text), max_tokens*4)]
+                summaries = []
+                
+                for chunk in chunks:
+                    response = self._make_api_call_with_retry(
+                        self.client.chat.completions.create,
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "Generate a concise summary of this text section:"},
+                            {"role": "user", "content": chunk}
+                        ],
+                        response_format={"type": "text"},
+                        timeout=self.timeout
+                    )
+                    summaries.append(response.choices[0].message.content)
+                
+                # Combine summaries
+                combined_summary = " ".join(summaries)
+                
+                # Generate final summary if needed
+                if len(combined_summary) > max_tokens * 4:
+                    final_response = self._make_api_call_with_retry(
+                        self.client.chat.completions.create,
+                        model="gpt-4",
+                        messages=[
+                            {"role": "system", "content": "Create a final concise summary from these section summaries:"},
+                            {"role": "user", "content": combined_summary}
+                        ],
+                        response_format={"type": "text"},
+                        timeout=self.timeout
+                    )
+                    return final_response.choices[0].message.content
+                return combined_summary
+                
+            else:
+                response = self._make_api_call_with_retry(
+                    self.client.chat.completions.create,
+                    model="gpt-4",
+                    messages=[
+                        {"role": "system", "content": "Generate a concise summary of the following text:"},
+                        {"role": "user", "content": text}
+                    ],
+                    response_format={"type": "text"},
+                    timeout=self.timeout
+                )
+                return response.choices[0].message.content
+                
         except Exception as e:
             st.error(f"Failed to generate summary: {str(e)}")
-            return text[:1000] + "..."  # Fallback to first 1000 chars if summary fails
+            # Log the full error for debugging
+            st.debug(f"Full error details: {repr(e)}")
+            return "Failed to generate summary. Starting with first question..."
 
     def generate_questions(self, text: str, num_questions: int = 2) -> list:
         """Generate a specified number of Socratic questions with timeout handling"""
