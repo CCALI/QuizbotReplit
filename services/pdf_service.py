@@ -134,7 +134,7 @@ class PDFService:
                 return "", [], [], {}
                 
             # Log found files
-            st.debug(f"Found PDF files: {pdf_files}")
+            st.write(f"Found PDF files: {pdf_files}")
             
             all_text = []
             all_tables = []
@@ -161,11 +161,11 @@ class PDFService:
                         f"{filename}:{k}": v for k, v in footnotes.items()
                     })
                     
-                    st.debug(f"Successfully processed {filename}")
+                    st.write(f"Successfully processed {filename}")
                     
                 except Exception as e:
                     st.warning(f"Error processing {filename}: {str(e)}")
-                    st.debug(f"Full error details for {filename}: {repr(e)}")
+                    st.write(f"Full error details for {filename}: {repr(e)}")
                     continue
             
             if not all_text:
@@ -176,7 +176,7 @@ class PDFService:
             
         except Exception as e:
             st.error(f"Error accessing folder {folder_path}: {str(e)}")
-            st.debug(f"Full error details: {repr(e)}")
+            st.write(f"Full error details: {repr(e)}")
             return "", [], [], {}
 
     def _extract_single_pdf(self, pdf_path: str) -> tuple:

@@ -22,7 +22,7 @@ class OpenAIService:
     def generate_summary(self, text: str) -> str:
         try:
             # Add logging for text length
-            st.debug(f"Attempting to summarize text of length: {len(text)}")
+            st.write(f"Attempting to summarize text of length: {len(text)}")
             
             # Break text into smaller chunks if too long
             max_tokens = 4000
@@ -77,7 +77,7 @@ class OpenAIService:
         except Exception as e:
             st.error(f"Failed to generate summary: {str(e)}")
             # Log the full error for debugging
-            st.debug(f"Full error details: {repr(e)}")
+            st.write(f"Full error details: {repr(e)}")
             return "Failed to generate summary. Starting with first question..."
 
     def generate_questions(self, text: str, num_questions: int = 2) -> list:
