@@ -31,7 +31,7 @@ with open('assets/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 def start_new_conversation():
-    """Start a new conversation by processing PDFs and generating questions"""
+    """Start a new conversation by processing PDFs and generating initial question"""
     try:
         with st.spinner("Processing PDF documents..."):
             # Extract text from all PDFs
@@ -40,31 +40,31 @@ def start_new_conversation():
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Process first chunk only for initial questions
+            # Process first chunk only for initial question
             chunks = pdf_service.chunk_text(text)
             if not chunks:
                 st.error("No valid text chunks found.")
                 return False
             
-            # Generate initial questions from first chunk
-            with st.spinner("Generating initial questions..."):
-                questions = openai_service.generate_questions(chunks[0], num_questions=2)
+            # Generate initial question from first chunk
+            with st.spinner("Generating initial question..."):
+                questions = openai_service.generate_questions(chunks[0], num_questions=1)
+                initial_question = questions[0]
                 
                 # Create new conversation
                 st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
                 st.session_state.messages = []
                 st.session_state.quiz_started = True
                 
-                # Save and display initial questions
-                st.success("Quiz ready!")
-                st.subheader("Let's discuss these questions:")
-                for i, question in enumerate(questions, 1):
-                    db_ops.save_message(st.session_state.conversation_id, "assistant", question)
-                    st.session_state.messages.append({"role": "assistant", "content": question})
+                # Save and add initial question to chat
+                db_ops.save_message(st.session_state.conversation_id, "assistant", initial_question)
+                st.session_state.messages.append({"role": "assistant", "content": initial_question})
                 
                 # Store remaining chunks for later use
                 if len(chunks) > 1:
                     st.session_state.remaining_chunks = chunks[1:]
+                
+                st.success("Quiz started!")
         
         return True
     except Exception as e:
