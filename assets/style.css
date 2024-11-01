@@ -14,6 +14,35 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* End Quiz button specific styling */
+[data-testid="stButton"] button[kind="primary"] {
+    background-color: #841617;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    width: 100%;
+    margin-top: 0.5rem;
+}
+
+[data-testid="stButton"] button[kind="primary"]:hover {
+    background-color: #6a1112;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Make chat avatars larger */
+.stChatMessage .stAvatar {
+    transform: scale(2);
+    margin: 1rem;
+}
+
+/* Adjust message spacing to accommodate larger icons */
+.stChatMessage {
+    margin-left: 2rem;
+    margin-right: 2rem;
+    padding-left: 2rem;
+}
+
 /* Input area styling */
 .stChatInput>div>textarea {
     border-color: #e0e0e0;
@@ -59,4 +88,17 @@ pre {
 
 code {
     font-family: monospace;
+}
+
+/* Download transcript button styling */
+[data-testid="stDownloadButton"] button {
+    background-color: #841617;
+    color: white;
+    width: auto;
+    margin: 1rem 0;
+}
+
+[data-testid="stDownloadButton"] button:hover {
+    background-color: #6a1112;
+    transform: translateY(-1px);
 }

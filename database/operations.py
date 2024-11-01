@@ -44,11 +44,47 @@ class DatabaseOperations:
     def get_conversation_messages(conversation_id: int):
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            "SELECT role, content FROM messages WHERE conversation_id = %s ORDER BY timestamp",
-            (conversation_id,)
+        cur.execute("""
+            SELECT role, content, timestamp, 
+                   (SELECT start_time FROM conversations WHERE id = %s) as start_time,
+                   (SELECT end_time FROM conversations WHERE id = %s) as end_time
+            FROM messages 
+            WHERE conversation_id = %s 
+            ORDER BY timestamp""",
+            (conversation_id, conversation_id, conversation_id)
         )
         messages = cur.fetchall()
         cur.close()
         conn.close()
         return messages
+
+    @staticmethod
+    def format_transcript(messages) -> str:
+        if not messages:
+            return "No messages found in conversation."
+        
+        # Get conversation start and end times from the first message
+        start_time = messages[0][3]
+        end_time = messages[0][4]
+        
+        # Format header
+        transcript = [
+            "=== QuizBot Conversation Transcript ===",
+            f"Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"{'Ended: ' + end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'Status: Ongoing'}",
+            "=" * 50,
+            ""
+        ]
+        
+        # Format messages
+        for role, content, timestamp, _, _ in messages:
+            timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            speaker = "QuizBot" if role == "assistant" else "You"
+            transcript.extend([
+                f"[{timestamp_str}] {speaker}:",
+                f"{content}",
+                "-" * 40,
+                ""
+            ])
+        
+        return "\n".join(transcript)

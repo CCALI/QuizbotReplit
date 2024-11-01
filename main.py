@@ -26,6 +26,8 @@ if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'quiz_started' not in st.session_state:
     st.session_state.quiz_started = False
+if 'show_transcript' not in st.session_state:
+    st.session_state.show_transcript = False
 
 # Load custom CSS
 with open('assets/style.css') as f:
@@ -51,6 +53,7 @@ def start_new_conversation():
                 st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
                 st.session_state.messages = []
                 st.session_state.quiz_started = True
+                st.session_state.show_transcript = False
                 
                 db_ops.save_message(st.session_state.conversation_id, "assistant", initial_question)
                 st.session_state.messages.append({"role": "assistant", "content": initial_question})
@@ -98,55 +101,67 @@ def main():
     # Main application layout
     st.title("QuizBot")
     
-    # Quiz controls
-    if not st.session_state.quiz_started:
-        if st.button("Begin Quiz"):
-            if start_new_conversation():
-                st.rerun()
-    else:
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("End Quiz"):
+    # Top controls container
+    top_container = st.container()
+    col1, col2 = top_container.columns([6, 1])
+    
+    with col1:
+        if not st.session_state.quiz_started:
+            if st.button("Begin Quiz", key="begin_quiz"):
+                if start_new_conversation():
+                    st.rerun()
+    
+    # End Quiz button always in the same position
+    with col2:
+        if st.session_state.quiz_started:
+            if st.button("End Quiz", key="end_quiz", type="primary"):
                 if st.session_state.conversation_id:
                     db_ops.end_conversation(st.session_state.conversation_id)
-                    messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
-                    
-                    transcript = "\n\n".join([
-                        f"{'You' if role == 'user' else 'QuizBot'}: {content}"
-                        for role, content in messages
-                    ])
-                    
-                    st.download_button(
-                        label="Download Transcript",
-                        data=transcript,
-                        file_name="conversation_transcript.txt",
-                        mime="text/plain"
-                    )
-                    
-                    st.session_state.conversation_id = None
-                    st.session_state.messages = []
-                    st.session_state.quiz_started = False
+                    st.session_state.show_transcript = True
                     st.rerun()
 
     # Chat interface using Streamlit's native components
     if st.session_state.quiz_started and st.session_state.conversation_id:
-        # Display messages
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"], avatar="🤖" if message["role"] == "assistant" else "👤"):
-                st.write(message["content"])
+        chat_container = st.container()
         
-        # Chat input
-        if prompt := st.chat_input("Type your response here..."):
-            # Save user message
-            db_ops.save_message(st.session_state.conversation_id, "user", prompt)
-            st.session_state.messages.append({"role": "user", "content": prompt})
+        with chat_container:
+            # Display messages
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"], avatar="🤖" if message["role"] == "assistant" else "👤"):
+                    st.write(message["content"])
             
-            # Generate and save bot response
-            with st.spinner("Thinking..."):
-                bot_response = openai_service.generate_response(st.session_state.messages)
-                db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
-                st.session_state.messages.append({"role": "assistant", "content": bot_response})
-            
+            # Chat input
+            if prompt := st.chat_input("Type your response here..."):
+                # Save user message
+                db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                
+                # Generate and save bot response
+                with st.spinner("Thinking..."):
+                    bot_response = openai_service.generate_response(st.session_state.messages)
+                    db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
+                    st.session_state.messages.append({"role": "assistant", "content": bot_response})
+                
+                st.rerun()
+    
+    # Show transcript download after ending quiz
+    if st.session_state.show_transcript:
+        messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
+        transcript = db_ops.format_transcript(messages)
+        
+        st.download_button(
+            label="Download Transcript",
+            data=transcript,
+            file_name=f"quizbot_transcript_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            key="download_transcript"
+        )
+        
+        if st.button("Start New Quiz", key="new_quiz"):
+            st.session_state.conversation_id = None
+            st.session_state.messages = []
+            st.session_state.quiz_started = False
+            st.session_state.show_transcript = False
             st.rerun()
 
 if __name__ == "__main__":
