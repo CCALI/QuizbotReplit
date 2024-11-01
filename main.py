@@ -5,6 +5,8 @@ from database.operations import DatabaseOperations
 from services.openai_service import OpenAIService
 from services.pdf_service import PDFService
 from utils.auth import Auth
+import asyncio
+import time
 
 # Initialize services
 openai_service = OpenAIService()
@@ -30,31 +32,45 @@ with open('assets/style.css') as f:
 
 def start_new_conversation():
     """Start a new conversation by processing PDFs and generating questions"""
-    # Extract text from all PDFs
-    text = pdf_service.extract_text_from_pdfs()
-    if not text:
-        st.error("No PDFs found in the Readings folder.")
+    try:
+        with st.spinner("Processing PDF documents..."):
+            # Extract text from all PDFs
+            text = pdf_service.extract_text_from_pdfs()
+            if not text:
+                st.error("No PDFs found in the Readings folder.")
+                return False
+            
+            # Process first chunk only for initial questions
+            chunks = pdf_service.chunk_text(text)
+            if not chunks:
+                st.error("No valid text chunks found.")
+                return False
+            
+            # Generate initial questions from first chunk
+            with st.spinner("Generating initial questions..."):
+                questions = openai_service.generate_questions(chunks[0], num_questions=2)
+                
+                # Create new conversation
+                st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
+                st.session_state.messages = []
+                st.session_state.quiz_started = True
+                
+                # Save and display initial questions
+                st.success("Quiz ready!")
+                st.subheader("Let's discuss these questions:")
+                for i, question in enumerate(questions, 1):
+                    st.write(f"{i}. {question}")
+                    db_ops.save_message(st.session_state.conversation_id, "assistant", question)
+                    st.session_state.messages.append({"role": "assistant", "content": question})
+                
+                # Store remaining chunks for later use
+                if len(chunks) > 1:
+                    st.session_state.remaining_chunks = chunks[1:]
+        
+        return True
+    except Exception as e:
+        st.error(f"An error occurred while starting the quiz: {str(e)}")
         return False
-    
-    # Process text in chunks
-    chunks = pdf_service.chunk_text(text)
-    questions = []
-    for chunk in chunks:
-        questions.extend(openai_service.generate_questions(chunk))
-    
-    # Create new conversation
-    st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
-    st.session_state.messages = []
-    st.session_state.quiz_started = True
-    
-    # Save and display initial questions
-    st.subheader("Let's discuss these questions:")
-    for i, question in enumerate(questions[:3], 1):
-        st.write(f"{i}. {question}")
-        db_ops.save_message(st.session_state.conversation_id, "assistant", question)
-        st.session_state.messages.append({"role": "assistant", "content": question})
-    
-    return True
 
 def main():
     st.title("QuizBot - Socratic Learning Assistant")
@@ -128,9 +144,10 @@ def main():
             st.session_state.messages.append({"role": "user", "content": user_input})
             
             # Generate and save bot response
-            bot_response = openai_service.generate_response(st.session_state.messages)
-            db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
-            st.session_state.messages.append({"role": "assistant", "content": bot_response})
+            with st.spinner("Thinking..."):
+                bot_response = openai_service.generate_response(st.session_state.messages)
+                db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
+                st.session_state.messages.append({"role": "assistant", "content": bot_response})
 
         # Display conversation
         for message in st.session_state.messages:
