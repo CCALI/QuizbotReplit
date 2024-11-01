@@ -1,4 +1,7 @@
 import streamlit as st
+# Set page config before any other Streamlit commands
+st.set_page_config(page_title="QuizBot", layout="wide")
+
 import os
 from database.models import init_db
 from database.operations import DatabaseOperations
@@ -61,8 +64,6 @@ def start_new_conversation():
         return False
 
 def main():
-    st.set_page_config(page_title="QuizBot", layout="wide")
-    
     # Authentication
     if not st.session_state.user_id:
         tab1, tab2 = st.tabs(["Login", "Register"])
@@ -95,79 +96,89 @@ def main():
         return
 
     # Main application layout
-    st.markdown("""
-        <div style="padding: 1rem 0;">
-            <h1 style="margin: 0;">QuizBot</h1>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Quiz controls
-    if not st.session_state.quiz_started:
-        if st.button("Begin Quiz"):
-            if start_new_conversation():
-                st.rerun()
-    else:
-        st.markdown("""
-            <div class="quiz-controls">
-                <button onclick="document.getElementById('end-quiz-button').click()">End Quiz</button>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Hidden button for End Quiz functionality
-        if st.button("End Quiz", key="end-quiz-button", type="primary"):
-            if st.session_state.conversation_id:
-                db_ops.end_conversation(st.session_state.conversation_id)
-                messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
-                
-                transcript = "\n\n".join([
-                    f"{'You' if role == 'user' else 'QuizBot'}: {content}"
-                    for role, content in messages
-                ])
-                
-                st.download_button(
-                    label="Download Transcript",
-                    data=transcript,
-                    file_name="conversation_transcript.txt",
-                    mime="text/plain"
-                )
-                
-                st.session_state.conversation_id = None
-                st.session_state.messages = []
-                st.session_state.quiz_started = False
-                st.rerun()
+    st.title("QuizBot")
+    
+    # Quiz controls in sidebar
+    with st.sidebar:
+        if not st.session_state.quiz_started:
+            if st.button("Begin Quiz", use_container_width=True):
+                if start_new_conversation():
+                    st.rerun()
+        else:
+            if st.button("End Quiz", type="primary", use_container_width=True):
+                if st.session_state.conversation_id:
+                    db_ops.end_conversation(st.session_state.conversation_id)
+                    messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
+                    
+                    transcript = "\n\n".join([
+                        f"{'You' if role == 'user' else 'QuizBot'}: {content}"
+                        for role, content in messages
+                    ])
+                    
+                    st.download_button(
+                        label="Download Transcript",
+                        data=transcript,
+                        file_name="conversation_transcript.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                    
+                    st.session_state.conversation_id = None
+                    st.session_state.messages = []
+                    st.session_state.quiz_started = False
+                    st.rerun()
 
     # Chat interface
     if st.session_state.quiz_started and st.session_state.conversation_id:
-        # Message area
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        st.markdown('<div class="message-area" id="message-area">', unsafe_allow_html=True)
+        # Create main chat container
+        chat_container = st.container()
         
-        for message in st.session_state.messages:
-            role_style = "user-message" if message["role"] == "user" else "bot-message"
-            icon = "👤" if message["role"] == "user" else "🤖"
+        # Message area with auto-scroll
+        with chat_container:
+            messages_area = st.empty()
             
-            st.markdown(f"""
-                <div class="chat-message {role_style}">
-                    <div class="chat-icon">{icon}</div>
-                    <div class="message-content">{message["content"]}</div>
+            # Combine all messages into HTML
+            messages_html = ""
+            for message in st.session_state.messages:
+                role_style = "user-message" if message["role"] == "user" else "bot-message"
+                icon = "👤" if message["role"] == "user" else "🤖"
+                messages_html += f"""
+                    <div class="chat-message {role_style}">
+                        <div class="chat-icon">{icon}</div>
+                        <div class="message-content">{message["content"]}</div>
+                    </div>
+                """
+            
+            # Display all messages in the empty container
+            messages_area.markdown(f"""
+                <div class="chat-container">
+                    <div class="message-area" id="message-area">
+                        {messages_html}
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Input area
-        st.markdown('<div class="chat-input">', unsafe_allow_html=True)
-        user_input = st.text_input("", placeholder="Type your response here...", key="user_input", label_visibility="collapsed")
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Input area at the bottom
+            input_container = st.container()
+            with input_container:
+                cols = st.columns([8, 2])
+                with cols[0]:
+                    user_input = st.text_input("", 
+                                             placeholder="Type your response here...", 
+                                             key="user_input", 
+                                             label_visibility="collapsed")
         
         # Auto-scroll script
         st.markdown("""
             <script>
                 function scrollToBottom() {
                     var messageArea = document.querySelector('.message-area');
-                    messageArea.scrollTop = messageArea.scrollHeight;
+                    if (messageArea) {
+                        messageArea.scrollTop = messageArea.scrollHeight;
+                    }
                 }
+                // Call immediately and after a short delay to ensure content is loaded
+                scrollToBottom();
                 setTimeout(scrollToBottom, 100);
             </script>
         """, unsafe_allow_html=True)
