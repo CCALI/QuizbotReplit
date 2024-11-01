@@ -98,14 +98,17 @@ def main():
     # Main application layout
     st.title("QuizBot")
     
-    # Quiz controls in sidebar
-    with st.sidebar:
-        if not st.session_state.quiz_started:
-            if st.button("Begin Quiz", use_container_width=True):
+    # Quiz controls using columns
+    if not st.session_state.quiz_started:
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("Begin Quiz"):
                 if start_new_conversation():
                     st.rerun()
-        else:
-            if st.button("End Quiz", type="primary", use_container_width=True):
+    else:
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("End Quiz", type="primary"):
                 if st.session_state.conversation_id:
                     db_ops.end_conversation(st.session_state.conversation_id)
                     messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
@@ -119,8 +122,7 @@ def main():
                         label="Download Transcript",
                         data=transcript,
                         file_name="conversation_transcript.txt",
-                        mime="text/plain",
-                        use_container_width=True
+                        mime="text/plain"
                     )
                     
                     st.session_state.conversation_id = None

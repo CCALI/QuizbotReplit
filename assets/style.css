@@ -11,35 +11,21 @@
     background-color: #6a1112;
 }
 
-/* Quiz controls */
-.quiz-controls {
-    position: fixed;
-    top: 0;
-    right: 1rem;
-    z-index: 100;
-    padding: 1rem;
-}
-
 /* Chat interface */
 .chat-container {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 80px);
-    max-height: calc(100vh - 80px);
-    margin: 0.5rem 0;
-    padding: 0.5rem;
-    background-color: white;
+    height: calc(100vh - 200px);
+    margin: 1rem 0;
+    border: 1px solid #e0e0e0;
     border-radius: 8px;
+    background-color: white;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     position: relative;
 }
 
 .message-area {
-    flex-grow: 1;
+    height: calc(100% - 70px);
     overflow-y: auto;
     padding: 1rem;
-    margin-bottom: 60px;
-    max-height: calc(100% - 60px);
     scroll-behavior: smooth;
 }
 
@@ -83,14 +69,15 @@
 
 /* Input area */
 .chat-input {
-    position: absolute;
+    position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
     background-color: white;
-    padding: 0.75rem;
+    padding: 1rem;
     border-top: 1px solid #e0e0e0;
     box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
+    z-index: 100;
 }
 
 .chat-input input {
