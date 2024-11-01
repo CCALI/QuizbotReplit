@@ -98,17 +98,15 @@ def main():
     # Main application layout
     st.title("QuizBot")
     
-    # Quiz controls using columns
+    # Quiz controls
     if not st.session_state.quiz_started:
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("Begin Quiz"):
-                if start_new_conversation():
-                    st.rerun()
+        if st.button("Begin Quiz"):
+            if start_new_conversation():
+                st.rerun()
     else:
         col1, col2 = st.columns([6, 1])
         with col2:
-            if st.button("End Quiz", type="primary"):
+            if st.button("End Quiz"):
                 if st.session_state.conversation_id:
                     db_ops.end_conversation(st.session_state.conversation_id)
                     messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
@@ -130,57 +128,18 @@ def main():
                     st.session_state.quiz_started = False
                     st.rerun()
 
-    # Chat interface
+    # Chat interface using Streamlit's native components
     if st.session_state.quiz_started and st.session_state.conversation_id:
-        # Create main chat container
-        chat_container = st.container()
+        # Display messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"], avatar="🤖" if message["role"] == "assistant" else "👤"):
+                st.write(message["content"])
         
-        # Message area with auto-scroll
-        with chat_container:
-            # Combine all messages into HTML
-            messages_html = '<div class="chat-container"><div class="message-area" id="message-area">'
-            
-            for message in st.session_state.messages:
-                role_style = "user-message" if message["role"] == "user" else "bot-message"
-                icon = "👤" if message["role"] == "user" else "🤖"
-                messages_html += f'''
-                    <div class="chat-message {role_style}">
-                        <div class="chat-icon">{icon}</div>
-                        <div class="message-content">{message["content"]}</div>
-                    </div>
-                '''
-            
-            messages_html += '</div></div>'
-            
-            # Display all messages
-            st.markdown(messages_html, unsafe_allow_html=True)
-            
-            # Input area at the bottom
-            st.markdown('<div class="chat-input">', unsafe_allow_html=True)
-            user_input = st.text_input("", 
-                                     placeholder="Type your response here...", 
-                                     key="user_input", 
-                                     label_visibility="collapsed")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Auto-scroll script
-        st.markdown("""
-            <script>
-                function scrollToBottom() {
-                    var messageArea = document.querySelector('.message-area');
-                    if (messageArea) {
-                        messageArea.scrollTop = messageArea.scrollHeight;
-                    }
-                }
-                scrollToBottom();
-                setTimeout(scrollToBottom, 100);
-            </script>
-        """, unsafe_allow_html=True)
-        
-        if user_input:
+        # Chat input
+        if prompt := st.chat_input("Type your response here..."):
             # Save user message
-            db_ops.save_message(st.session_state.conversation_id, "user", user_input)
-            st.session_state.messages.append({"role": "user", "content": user_input})
+            db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+            st.session_state.messages.append({"role": "user", "content": prompt})
             
             # Generate and save bot response
             with st.spinner("Thinking..."):
