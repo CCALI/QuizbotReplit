@@ -7,29 +7,17 @@ class PDFService:
     def __init__(self):
         self.readings_folder = 'Readings'
 
-    def save_pdf(self, pdf_file) -> str:
-        """Save the uploaded PDF to the Readings folder and return the saved file path"""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{timestamp}_{pdf_file.name}"
-        file_path = os.path.join(self.readings_folder, filename)
-        
-        with open(file_path, 'wb') as f:
-            f.write(pdf_file.getvalue())
-        
-        return file_path
-
-    def extract_text(self, pdf_file) -> str:
-        """Extract text from a PDF file"""
-        # Save the PDF first
-        file_path = self.save_pdf(pdf_file)
-        
-        # Then read and extract text
-        with open(file_path, 'rb') as f:
-            pdf_reader = PyPDF2.PdfReader(f)
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text()
-        return text
+    def extract_text_from_pdfs(self) -> str:
+        """Extract text from all PDFs in the Readings folder"""
+        all_text = ""
+        for filename in os.listdir(self.readings_folder):
+            if filename.endswith('.pdf'):
+                file_path = os.path.join(self.readings_folder, filename)
+                with open(file_path, 'rb') as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    for page in pdf_reader.pages:
+                        all_text += page.extract_text() + "\n"
+        return all_text
 
     @staticmethod
     def chunk_text(text: str, chunk_size: int = 2000) -> list:

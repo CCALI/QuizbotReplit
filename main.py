@@ -26,6 +26,33 @@ if 'messages' not in st.session_state:
 with open('assets/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+def start_new_conversation():
+    """Start a new conversation by processing PDFs and generating questions"""
+    # Extract text from all PDFs
+    text = pdf_service.extract_text_from_pdfs()
+    if not text:
+        st.error("No PDFs found in the Readings folder.")
+        return False
+    
+    # Process text in chunks
+    chunks = pdf_service.chunk_text(text)
+    questions = []
+    for chunk in chunks:
+        questions.extend(openai_service.generate_questions(chunk))
+    
+    # Create new conversation
+    st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
+    st.session_state.messages = []
+    
+    # Save and display initial questions
+    st.subheader("Let's discuss these questions:")
+    for i, question in enumerate(questions[:3], 1):
+        st.write(f"{i}. {question}")
+        db_ops.save_message(st.session_state.conversation_id, "assistant", question)
+        st.session_state.messages.append({"role": "assistant", "content": question})
+    
+    return True
+
 def main():
     st.title("QuizBot - Socratic Learning Assistant")
 
@@ -63,24 +90,9 @@ def main():
     # Main application
     st.write(f"Welcome back!")
 
-    # PDF Upload
-    uploaded_file = st.file_uploader("Upload PDF Article", type="pdf")
-    if uploaded_file and st.button("Process Article"):
-        text = pdf_service.extract_text(uploaded_file)
-        chunks = pdf_service.chunk_text(text)
-        questions = []
-        for chunk in chunks:
-            questions.extend(openai_service.generate_questions(chunk))
-        
-        st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
-        st.session_state.messages = []
-        
-        # Display initial questions
-        st.subheader("Let's discuss these questions:")
-        for i, question in enumerate(questions[:3], 1):
-            st.write(f"{i}. {question}")
-            db_ops.save_message(st.session_state.conversation_id, "assistant", question)
-            st.session_state.messages.append({"role": "assistant", "content": question})
+    # Start new conversation if none exists
+    if not st.session_state.conversation_id:
+        start_new_conversation()
 
     # Chat interface
     if st.session_state.conversation_id:
