@@ -1,0 +1,34 @@
+To create a more intuitive and user-friendly chat interface similar to ChatGPT's, you can instruct the coding agent with the following points:
+
+1. **Single Message Area**: The large blank box should be repurposed as a single scrollable message area. This area will display a conversation between Quizbot and the student, allowing both questions and responses to appear sequentially. Each message (from either Quizbot or the student) should have a clear distinction, like ChatGPT's chat bubbles or a simple "Quizbot:" and "Student:" format.
+
+2. **Sequential Display of Chat**: Instead of displaying only the current question or response, the message area should append each new question and response to the chat history. This will allow the conversation to feel continuous, so the student can scroll back through previous questions and responses for context.
+
+3. **Remove Separate Response Box**: Currently, there is an additional response box at the bottom. Instead of this, there should be only one response input field where students type their responses, which will be added to the message area as a new message once submitted.
+
+4. **Inline Question Display**: Instead of displaying the question in a separate, fixed box, let Quizbot’s questions appear as messages within the conversation flow. This way, every new question appears within the chat area, similar to how prompts work in ChatGPT.
+
+5. **End Quiz Button**: Place the "End Quiz" button in a consistent, accessible position, like at the top or in the corner of the interface, without it affecting the message area’s layout.
+
+6. **Styling for Readability**: Use alternating colors or subtle borders to differentiate Quizbot's messages from student responses. This distinction will improve readability and make the conversation flow more natural.
+
+7. **Scroll Behavior**: Implement an automatic scroll to the bottom of the message area each time a new message is added, ensuring that students are always viewing the latest message from Quizbot without needing to scroll manually.
+
+Here’s a sample structure that they could follow in pseudocode or HTML/CSS:
+
+```html
+<div class="chat-container">
+    <div class="message-area">
+        <!-- Dynamic messages will append here -->
+    </div>
+    <input type="text" class="response-input" placeholder="Type your response here...">
+    <button class="end-quiz-button">End Quiz</button>
+</div>
+```
+
+**CSS Suggestions**:
+- `.message-area`: Set overflow to auto, with a defined max height to allow scrolling.
+- `.response-input`: Positioned at the bottom for consistent response entry.
+- `.end-quiz-button`: Float to the top-right corner or place it separately from the chat area to prevent UI clutter.
+
+By structuring the chat this way, the experience will mimic ChatGPT's interface more closely, creating a seamless and engaging chat environment.

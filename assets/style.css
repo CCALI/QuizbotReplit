@@ -11,15 +11,31 @@
     background-color: #6a1112;
 }
 
-/* Chat container styles */
+/* Quiz controls */
+.quiz-controls {
+    position: fixed;
+    top: 0;
+    right: 1rem;
+    z-index: 100;
+    padding: 1rem;
+}
+
+/* Chat interface */
 .chat-container {
-    height: 400px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 200px);
+    margin: 1rem 0;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.message-area {
+    flex-grow: 1;
     overflow-y: auto;
     padding: 1rem;
-    margin-bottom: 1rem;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    background-color: white;
+    scroll-behavior: smooth;
 }
 
 /* Chat message styles */
@@ -27,46 +43,67 @@
     display: flex;
     align-items: flex-start;
     padding: 1rem;
-    border-radius: 4px;
     margin: 0.5rem 0;
-    transition: background-color 0.2s ease;
+    border-radius: 8px;
+    animation: fadeIn 0.3s ease-in;
 }
 
-.chat-message:hover {
-    background-color: #f8f8f8;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .chat-icon {
     font-size: 1.5rem;
     margin-right: 1rem;
     min-width: 2rem;
+    text-align: center;
 }
 
 .message-content {
     flex: 1;
     line-height: 1.5;
+    font-size: 1rem;
 }
 
 .user-message {
     background-color: #F0ECE2;
+    margin-left: 2rem;
 }
 
 .bot-message {
     background-color: #f8f5f0;
+    margin-right: 2rem;
 }
 
-/* Input field styling */
+/* Input area */
 .chat-input {
     position: sticky;
     bottom: 0;
     background-color: white;
     padding: 1rem;
     border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.file-uploader {
-    border: 2px dashed #841617;
+.chat-input input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #e0e0e0;
     border-radius: 4px;
-    padding: 1rem;
-    text-align: center;
+    font-size: 1rem;
+}
+
+/* Hide default Streamlit elements */
+#MainMenu, header {
+    visibility: hidden;
+}
+
+.stDeployButton {
+    display: none;
+}
+
+/* Customize footer */
+footer {
+    visibility: hidden;
 }

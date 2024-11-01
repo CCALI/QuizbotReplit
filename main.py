@@ -5,8 +5,6 @@ from database.operations import DatabaseOperations
 from services.openai_service import OpenAIService
 from services.pdf_service import PDFService
 from utils.auth import Auth
-import asyncio
-import time
 
 # Initialize services
 openai_service = OpenAIService()
@@ -34,46 +32,37 @@ def start_new_conversation():
     """Start a new conversation by processing PDFs and generating initial question"""
     try:
         with st.spinner("Processing PDF documents..."):
-            # Extract text from all PDFs
             text = pdf_service.extract_text_from_pdfs()
             if not text:
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Process first chunk only for initial question
             chunks = pdf_service.chunk_text(text)
             if not chunks:
                 st.error("No valid text chunks found.")
                 return False
             
-            # Generate initial question from first chunk
-            with st.spinner("Generating initial question..."):
-                questions = openai_service.generate_questions(chunks[0], num_questions=1)
-                initial_question = questions[0]
+            with st.spinner("Starting conversation..."):
+                initial_question = openai_service.generate_questions(chunks[0], num_questions=1)[0]
                 
-                # Create new conversation
                 st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
                 st.session_state.messages = []
                 st.session_state.quiz_started = True
                 
-                # Save and add initial question to chat
                 db_ops.save_message(st.session_state.conversation_id, "assistant", initial_question)
                 st.session_state.messages.append({"role": "assistant", "content": initial_question})
                 
-                # Store remaining chunks for later use
                 if len(chunks) > 1:
                     st.session_state.remaining_chunks = chunks[1:]
-                
-                st.success("Quiz started!")
         
         return True
     except Exception as e:
-        st.error(f"An error occurred while starting the quiz: {str(e)}")
+        st.error(f"An error occurred: {str(e)}")
         return False
 
 def main():
-    st.title("QuizBot - Socratic Learning Assistant")
-
+    st.set_page_config(page_title="QuizBot", layout="wide")
+    
     # Authentication
     if not st.session_state.user_id:
         tab1, tab2 = st.tabs(["Login", "Register"])
@@ -105,60 +94,83 @@ def main():
                         st.error("Registration failed. Username might be taken.")
         return
 
-    # Main application
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if not st.session_state.quiz_started and st.button("Begin Quiz"):
-            start_new_conversation()
-            st.rerun()
-    
-    with col2:
-        if st.session_state.conversation_id and st.button("End Quiz"):
-            db_ops.end_conversation(st.session_state.conversation_id)
-            messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
-            
-            transcript = "\n\n".join([
-                f"{'You' if role == 'user' else 'QuizBot'}: {content}"
-                for role, content in messages
-            ])
-            
-            st.download_button(
-                label="Download Transcript",
-                data=transcript,
-                file_name="conversation_transcript.txt",
-                mime="text/plain"
-            )
-            
-            st.session_state.conversation_id = None
-            st.session_state.messages = []
-            st.session_state.quiz_started = False
-            st.rerun()
+    # Main application layout
+    st.markdown("""
+        <div style="padding: 1rem 0;">
+            <h1 style="margin: 0;">QuizBot</h1>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Quiz controls
+    if not st.session_state.quiz_started:
+        if st.button("Begin Quiz"):
+            if start_new_conversation():
+                st.rerun()
+    else:
+        st.markdown("""
+            <div class="quiz-controls">
+                <button onclick="document.getElementById('end-quiz-button').click()">End Quiz</button>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Hidden button for End Quiz functionality
+        if st.button("End Quiz", key="end-quiz-button", type="primary"):
+            if st.session_state.conversation_id:
+                db_ops.end_conversation(st.session_state.conversation_id)
+                messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
+                
+                transcript = "\n\n".join([
+                    f"{'You' if role == 'user' else 'QuizBot'}: {content}"
+                    for role, content in messages
+                ])
+                
+                st.download_button(
+                    label="Download Transcript",
+                    data=transcript,
+                    file_name="conversation_transcript.txt",
+                    mime="text/plain"
+                )
+                
+                st.session_state.conversation_id = None
+                st.session_state.messages = []
+                st.session_state.quiz_started = False
+                st.rerun()
 
     # Chat interface
     if st.session_state.quiz_started and st.session_state.conversation_id:
-        # Create a container for chat history
+        # Message area
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+        st.markdown('<div class="message-area" id="message-area">', unsafe_allow_html=True)
         
-        # Display conversation
         for message in st.session_state.messages:
             role_style = "user-message" if message["role"] == "user" else "bot-message"
             icon = "👤" if message["role"] == "user" else "🤖"
-            st.markdown(
-                f'''
+            
+            st.markdown(f"""
                 <div class="chat-message {role_style}">
                     <div class="chat-icon">{icon}</div>
                     <div class="message-content">{message["content"]}</div>
                 </div>
-                ''',
-                unsafe_allow_html=True
-            )
+            """, unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Input field at the bottom
+        # Input area
         st.markdown('<div class="chat-input">', unsafe_allow_html=True)
-        user_input = st.text_input("Your response:", key="user_input")
+        user_input = st.text_input("", placeholder="Type your response here...", key="user_input", label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Auto-scroll script
+        st.markdown("""
+            <script>
+                function scrollToBottom() {
+                    var messageArea = document.querySelector('.message-area');
+                    messageArea.scrollTop = messageArea.scrollHeight;
+                }
+                setTimeout(scrollToBottom, 100);
+            </script>
+        """, unsafe_allow_html=True)
         
         if user_input:
             # Save user message
@@ -171,7 +183,6 @@ def main():
                 db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
                 st.session_state.messages.append({"role": "assistant", "content": bot_response})
             
-            # Clear input and rerun to update chat
             st.rerun()
 
 if __name__ == "__main__":
