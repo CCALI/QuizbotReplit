@@ -114,19 +114,18 @@ def main():
     top_container = st.container()
     col1, col2 = top_container.columns([6, 1])
     
+    # Add logout button in top-right
+    with col2:
+        if st.button("Logout", key="logout"):
+            for key in st.session_state.keys():
+                del st.session_state[key]
+            st.rerun()
+    
+    # Begin Quiz button
     with col1:
         if not st.session_state.quiz_started:
             if st.button("Begin Quiz", key="begin_quiz"):
                 if start_new_conversation():
-                    st.rerun()
-    
-    # End Quiz button always in the same position
-    with col2:
-        if st.session_state.quiz_started:
-            if st.button("End Quiz", key="end_quiz", type="primary"):
-                if st.session_state.conversation_id:
-                    db_ops.end_conversation(st.session_state.conversation_id)
-                    st.session_state.show_transcript = True
                     st.rerun()
 
     # Chat interface using Streamlit's native components
@@ -152,26 +151,39 @@ def main():
                     st.session_state.messages.append({"role": "assistant", "content": bot_response})
                 
                 st.rerun()
+        
+        # Action buttons below chat
+        if st.session_state.quiz_started:
+            button_cols = st.columns([1, 1, 4])
+            with button_cols[0]:
+                if st.button("End Quiz", key="end_quiz", type="primary"):
+                    if st.session_state.conversation_id:
+                        db_ops.end_conversation(st.session_state.conversation_id)
+                        st.session_state.show_transcript = True
+                        st.rerun()
     
-    # Show transcript download after ending quiz
+    # Show transcript download and new quiz button with consistent layout
     if st.session_state.show_transcript:
         messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
         transcript = db_ops.format_transcript(messages)
         
-        st.download_button(
-            label="Download Transcript",
-            data=transcript,
-            file_name=f"quizbot_transcript_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-            key="download_transcript"
-        )
+        button_cols = st.columns([1, 1, 4])
+        with button_cols[0]:
+            st.download_button(
+                label="Download Transcript",
+                data=transcript,
+                file_name=f"quizbot_transcript_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                key="download_transcript"
+            )
         
-        if st.button("Start New Quiz", key="new_quiz"):
-            st.session_state.conversation_id = None
-            st.session_state.messages = []
-            st.session_state.quiz_started = False
-            st.session_state.show_transcript = False
-            st.rerun()
+        with button_cols[1]:
+            if st.button("Start New Quiz", key="new_quiz"):
+                st.session_state.conversation_id = None
+                st.session_state.messages = []
+                st.session_state.quiz_started = False
+                st.session_state.show_transcript = False
+                st.rerun()
 
 if __name__ == "__main__":
     main()
