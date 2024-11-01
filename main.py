@@ -43,7 +43,7 @@ def main():
                     success, user_id = Auth.verify_user(username, password)
                     if success:
                         st.session_state.user_id = user_id
-                        st.experimental_rerun()
+                        st.rerun()
                     else:
                         st.error("Invalid credentials")
         
@@ -121,7 +121,7 @@ def main():
                 
                 st.session_state.conversation_id = None
                 st.session_state.messages = []
-                st.experimental_rerun()
+                st.rerun()
 
 if __name__ == "__main__":
     main()
