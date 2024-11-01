@@ -40,18 +40,23 @@ def start_new_conversation():
     """Start a new conversation by processing PDFs and generating initial question"""
     try:
         with st.spinner("Processing PDF documents..."):
-            text = pdf_service.extract_text_from_pdfs()
+            text, tables, images, footnotes = pdf_service.extract_text_with_formatting('Readings')
             if not text:
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
+            # Generate summary before chunking
+            summary = openai_service.generate_summary(text)
+            
+            # Then chunk the text for detailed processing
             chunks = pdf_service.chunk_text(text)
             if not chunks:
                 st.error("No valid text chunks found.")
                 return False
             
             with st.spinner("Starting conversation..."):
-                initial_question = openai_service.generate_questions(chunks[0], num_questions=1)[0]
+                # Generate questions from summary
+                initial_question = openai_service.generate_questions(summary, num_questions=1)[0]
                 
                 st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
                 st.session_state.messages = []

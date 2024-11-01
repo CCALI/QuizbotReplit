@@ -121,8 +121,50 @@ class PDFService:
             st.warning(f"Could not extract images from {pdf_path}: {str(e)}")
         return images
 
-    def extract_text_with_formatting(self, pdf_path: str) -> tuple:
-        """Extract text while preserving formatting"""
+    def extract_text_with_formatting(self, folder_path: str) -> tuple:
+        """Extract text from all PDFs in the folder while preserving formatting"""
+        all_text = []
+        all_tables = []
+        all_images = []
+        all_footnotes = {}
+        
+        try:
+            pdf_files = [f for f in os.listdir(folder_path) if f.endswith('.pdf')]
+            if not pdf_files:
+                return "", [], [], {}
+            
+            for filename in pdf_files:
+                file_path = os.path.join(folder_path, filename)
+                
+                try:
+                    # Extract content from each PDF
+                    text, tables, images, footnotes = self._extract_single_pdf(file_path)
+                    
+                    # Add document separator and filename
+                    all_text.append(f"\n=== Document: {filename} ===\n")
+                    all_text.append(text)
+                    
+                    # Extend tables and images lists
+                    all_tables.extend(tables)
+                    all_images.extend(images)
+                    
+                    # Update footnotes dictionary
+                    all_footnotes.update({
+                        f"{filename}:{k}": v for k, v in footnotes.items()
+                    })
+                    
+                except Exception as e:
+                    st.warning(f"Error processing {filename}: {str(e)}")
+                    continue
+            
+            return '\n'.join(all_text), all_tables, all_images, all_footnotes
+            
+        except Exception as e:
+            st.error(f"Error accessing folder {folder_path}: {str(e)}")
+            return "", [], [], {}
+
+    def _extract_single_pdf(self, pdf_path: str) -> tuple:
+        """Extract text and formatting from a single PDF file"""
         text_content = []
         tables = []
         images = []

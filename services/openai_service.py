@@ -19,6 +19,23 @@ class OpenAIService:
                     raise e
                 time.sleep(2 ** attempt)  # Exponential backoff
 
+    def generate_summary(self, text: str) -> str:
+        try:
+            response = self._make_api_call_with_retry(
+                self.client.chat.completions.create,
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Generate a concise summary of the following text, focusing on key concepts and main ideas:"},
+                    {"role": "user", "content": text}
+                ],
+                response_format={"type": "text"},
+                timeout=self.timeout
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            st.error(f"Failed to generate summary: {str(e)}")
+            return text[:1000] + "..."  # Fallback to first 1000 chars if summary fails
+
     def generate_questions(self, text: str, num_questions: int = 2) -> list:
         """Generate a specified number of Socratic questions with timeout handling"""
         prompt = f"Generate {num_questions} Socratic questions based on this text: {text}"
