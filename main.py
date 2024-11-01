@@ -84,7 +84,7 @@ def main():
                     success, user_id, first_name, last_name = Auth.verify_user(username, password)
                     if success:
                         st.session_state.user_id = user_id
-                        st.session_state.user_name = f"{first_name} {last_name}".strip() or username
+                        st.session_state.user_name = f"{first_name or ''} {last_name or ''}".strip() or username
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
@@ -107,8 +107,8 @@ def main():
     # Main application layout
     st.title("QuizBot")
     
-    # Display welcome message with user's name
-    st.write(f"Welcome, {st.session_state.user_name}!")
+    if not st.session_state.quiz_started:
+        st.write("Welcome. Select 'Begin Quiz' to start the quiz. Select 'End Quiz' when you are done to download a transcript of the quiz.")
     
     # Top controls container
     top_container = st.container()
