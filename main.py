@@ -21,6 +21,8 @@ if 'conversation_id' not in st.session_state:
     st.session_state.conversation_id = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
+if 'quiz_started' not in st.session_state:
+    st.session_state.quiz_started = False
 
 # Load custom CSS
 with open('assets/style.css') as f:
@@ -43,6 +45,7 @@ def start_new_conversation():
     # Create new conversation
     st.session_state.conversation_id = db_ops.create_conversation(st.session_state.user_id)
     st.session_state.messages = []
+    st.session_state.quiz_started = True
     
     # Save and display initial questions
     st.subheader("Let's discuss these questions:")
@@ -88,14 +91,36 @@ def main():
         return
 
     # Main application
-    st.write(f"Welcome back!")
-
-    # Start new conversation if none exists
-    if not st.session_state.conversation_id:
-        start_new_conversation()
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if not st.session_state.quiz_started and st.button("Begin Quiz"):
+            start_new_conversation()
+            st.rerun()
+    
+    with col2:
+        if st.session_state.conversation_id and st.button("End Quiz"):
+            db_ops.end_conversation(st.session_state.conversation_id)
+            messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
+            
+            transcript = "\n\n".join([
+                f"{'You' if role == 'user' else 'QuizBot'}: {content}"
+                for role, content in messages
+            ])
+            
+            st.download_button(
+                label="Download Transcript",
+                data=transcript,
+                file_name="conversation_transcript.txt",
+                mime="text/plain"
+            )
+            
+            st.session_state.conversation_id = None
+            st.session_state.messages = []
+            st.session_state.quiz_started = False
+            st.rerun()
 
     # Chat interface
-    if st.session_state.conversation_id:
+    if st.session_state.quiz_started and st.session_state.conversation_id:
         user_input = st.text_input("Your response:")
         if user_input:
             # Save user message
@@ -112,28 +137,6 @@ def main():
             role_style = "user-message" if message["role"] == "user" else "bot-message"
             st.markdown(f'<div class="chat-message {role_style}">{message["content"]}</div>', 
                        unsafe_allow_html=True)
-
-        # End conversation and download transcript
-        if st.button("End Conversation"):
-            if st.session_state.conversation_id:
-                db_ops.end_conversation(st.session_state.conversation_id)
-                messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
-                
-                transcript = "\n\n".join([
-                    f"{'You' if role == 'user' else 'QuizBot'}: {content}"
-                    for role, content in messages
-                ])
-                
-                st.download_button(
-                    label="Download Transcript",
-                    data=transcript,
-                    file_name="conversation_transcript.txt",
-                    mime="text/plain"
-                )
-                
-                st.session_state.conversation_id = None
-                st.session_state.messages = []
-                st.rerun()
 
 if __name__ == "__main__":
     main()
