@@ -3,6 +3,7 @@ import streamlit as st
 st.set_page_config(page_title="QuizBot", layout="wide")
 
 import os
+from datetime import datetime
 from database.models import init_db
 from database.operations import DatabaseOperations
 from services.openai_service import OpenAIService
