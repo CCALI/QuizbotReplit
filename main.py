@@ -21,6 +21,8 @@ init_db()
 # Session state initialization
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = None
 if 'conversation_id' not in st.session_state:
     st.session_state.conversation_id = None
 if 'messages' not in st.session_state:
@@ -79,9 +81,10 @@ def main():
                 submit = st.form_submit_button("Login")
                 
                 if submit:
-                    success, user_id = Auth.verify_user(username, password)
+                    success, user_id, first_name, last_name = Auth.verify_user(username, password)
                     if success:
                         st.session_state.user_id = user_id
+                        st.session_state.user_name = f"{first_name} {last_name}".strip() or username
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
@@ -90,10 +93,12 @@ def main():
             with st.form("register_form"):
                 new_username = st.text_input("Choose Username")
                 new_password = st.text_input("Choose Password", type="password")
+                first_name = st.text_input("First Name")
+                last_name = st.text_input("Last Name")
                 submit = st.form_submit_button("Register")
                 
                 if submit:
-                    if Auth.register_user(new_username, new_password):
+                    if Auth.register_user(new_username, new_password, first_name, last_name):
                         st.success("Registration successful! Please login.")
                     else:
                         st.error("Registration failed. Username might be taken.")
@@ -101,6 +106,9 @@ def main():
 
     # Main application layout
     st.title("QuizBot")
+    
+    # Display welcome message with user's name
+    st.write(f"Welcome, {st.session_state.user_name}!")
     
     # Top controls container
     top_container = st.container()

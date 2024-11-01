@@ -15,12 +15,14 @@ def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Create users table
+    # Create users table with full name fields
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username VARCHAR(100) UNIQUE NOT NULL,
             password_hash VARCHAR(200) NOT NULL,
+            first_name VARCHAR(100),
+            last_name VARCHAR(100),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -44,6 +46,25 @@ def init_db():
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+    
+    # Add new columns if they don't exist
+    cur.execute("""
+        DO $$ 
+        BEGIN 
+            BEGIN
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(100);
+            EXCEPTION 
+                WHEN duplicate_column THEN 
+                    NULL;
+            END;
+            BEGIN
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name VARCHAR(100);
+            EXCEPTION 
+                WHEN duplicate_column THEN 
+                    NULL;
+            END;
+        END $$;
     """)
     
     conn.commit()

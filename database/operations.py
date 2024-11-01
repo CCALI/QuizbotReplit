@@ -45,13 +45,15 @@ class DatabaseOperations:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT role, content, timestamp, 
-                   (SELECT start_time FROM conversations WHERE id = %s) as start_time,
-                   (SELECT end_time FROM conversations WHERE id = %s) as end_time
-            FROM messages 
-            WHERE conversation_id = %s 
-            ORDER BY timestamp""",
-            (conversation_id, conversation_id, conversation_id)
+            SELECT m.role, m.content, m.timestamp, 
+                   c.start_time, c.end_time,
+                   u.first_name, u.last_name
+            FROM messages m
+            JOIN conversations c ON m.conversation_id = c.id
+            JOIN users u ON c.user_id = u.id
+            WHERE m.conversation_id = %s 
+            ORDER BY m.timestamp""",
+            (conversation_id,)
         )
         messages = cur.fetchall()
         cur.close()
@@ -63,13 +65,14 @@ class DatabaseOperations:
         if not messages:
             return "No messages found in conversation."
         
-        # Get conversation start and end times from the first message
-        start_time = messages[0][3]
-        end_time = messages[0][4]
+        # Get conversation details and user info from the first message
+        _, _, _, start_time, end_time, first_name, last_name = messages[0]
+        user_full_name = f"{first_name} {last_name}".strip() or "Anonymous User"
         
         # Format header
         transcript = [
             "=== QuizBot Conversation Transcript ===",
+            f"Student: {user_full_name}",
             f"Started: {start_time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"{'Ended: ' + end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else 'Status: Ongoing'}",
             "=" * 50,
@@ -77,9 +80,9 @@ class DatabaseOperations:
         ]
         
         # Format messages
-        for role, content, timestamp, _, _ in messages:
+        for role, content, timestamp, *_ in messages:
             timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
-            speaker = "QuizBot" if role == "assistant" else "You"
+            speaker = "QuizBot" if role == "assistant" else user_full_name
             transcript.extend([
                 f"[{timestamp_str}] {speaker}:",
                 f"{content}",
