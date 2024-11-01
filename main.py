@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from database.models import init_db
 from database.operations import DatabaseOperations
+from database.analytics import AnalyticsOperations
 from services.openai_service import OpenAIService
 from services.pdf_service import PDFService
 from utils.auth import Auth
@@ -63,7 +64,12 @@ def start_new_conversation():
                 st.session_state.quiz_started = True
                 st.session_state.show_transcript = False
                 
-                db_ops.save_message(st.session_state.conversation_id, "assistant", initial_question)
+                # Save and track initial message
+                message_id = db_ops.save_message(st.session_state.conversation_id, "assistant", initial_question)
+                AnalyticsOperations.update_message_analytics(message_id)
+                AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+                AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+                
                 st.session_state.messages.append({"role": "assistant", "content": initial_question})
                 
                 if len(chunks) > 1:
@@ -145,15 +151,21 @@ def main():
             
             # Chat input
             if prompt := st.chat_input("Type your response here..."):
-                # Save user message
-                db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+                # Save and track user message
+                message_id = db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+                AnalyticsOperations.update_message_analytics(message_id)
                 st.session_state.messages.append({"role": "user", "content": prompt})
                 
                 # Generate and save bot response
                 with st.spinner("Thinking..."):
                     bot_response = openai_service.generate_response(st.session_state.messages)
-                    db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
+                    message_id = db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
+                    AnalyticsOperations.update_message_analytics(message_id)
                     st.session_state.messages.append({"role": "assistant", "content": bot_response})
+                
+                # Update analytics
+                AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+                AnalyticsOperations.update_user_analytics(st.session_state.user_id)
                 
                 st.rerun()
         
@@ -164,6 +176,15 @@ def main():
                 if st.button("End Quiz", key="end_quiz", type="primary"):
                     if st.session_state.conversation_id:
                         db_ops.end_conversation(st.session_state.conversation_id)
+                        # Update completion status and analytics
+                        with get_db_connection() as conn:
+                            cur = conn.cursor()
+                            cur.execute(
+                                "UPDATE conversations SET completion_status = 'completed' WHERE id = %s",
+                                (st.session_state.conversation_id,)
+                            )
+                            conn.commit()
+                        AnalyticsOperations.update_user_analytics(st.session_state.user_id)
                         st.session_state.show_transcript = True
                         st.rerun()
     
