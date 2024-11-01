@@ -11,10 +11,40 @@
     background-color: #6a1112;
 }
 
+/* Chat container styles */
+.chat-container {
+    height: 400px;
+    overflow-y: auto;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: white;
+}
+
+/* Chat message styles */
 .chat-message {
+    display: flex;
+    align-items: flex-start;
     padding: 1rem;
     border-radius: 4px;
     margin: 0.5rem 0;
+    transition: background-color 0.2s ease;
+}
+
+.chat-message:hover {
+    background-color: #f8f8f8;
+}
+
+.chat-icon {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    min-width: 2rem;
+}
+
+.message-content {
+    flex: 1;
+    line-height: 1.5;
 }
 
 .user-message {
@@ -23,6 +53,15 @@
 
 .bot-message {
     background-color: #f8f5f0;
+}
+
+/* Input field styling */
+.chat-input {
+    position: sticky;
+    bottom: 0;
+    background-color: white;
+    padding: 1rem;
+    border-top: 1px solid #e0e0e0;
 }
 
 .file-uploader {

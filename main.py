@@ -59,7 +59,6 @@ def start_new_conversation():
                 st.success("Quiz ready!")
                 st.subheader("Let's discuss these questions:")
                 for i, question in enumerate(questions, 1):
-                    st.write(f"{i}. {question}")
                     db_ops.save_message(st.session_state.conversation_id, "assistant", question)
                     st.session_state.messages.append({"role": "assistant", "content": question})
                 
@@ -137,7 +136,30 @@ def main():
 
     # Chat interface
     if st.session_state.quiz_started and st.session_state.conversation_id:
-        user_input = st.text_input("Your response:")
+        # Create a container for chat history
+        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+        
+        # Display conversation
+        for message in st.session_state.messages:
+            role_style = "user-message" if message["role"] == "user" else "bot-message"
+            icon = "👤" if message["role"] == "user" else "🤖"
+            st.markdown(
+                f'''
+                <div class="chat-message {role_style}">
+                    <div class="chat-icon">{icon}</div>
+                    <div class="message-content">{message["content"]}</div>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Input field at the bottom
+        st.markdown('<div class="chat-input">', unsafe_allow_html=True)
+        user_input = st.text_input("Your response:", key="user_input")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         if user_input:
             # Save user message
             db_ops.save_message(st.session_state.conversation_id, "user", user_input)
@@ -148,12 +170,9 @@ def main():
                 bot_response = openai_service.generate_response(st.session_state.messages)
                 db_ops.save_message(st.session_state.conversation_id, "assistant", bot_response)
                 st.session_state.messages.append({"role": "assistant", "content": bot_response})
-
-        # Display conversation
-        for message in st.session_state.messages:
-            role_style = "user-message" if message["role"] == "user" else "bot-message"
-            st.markdown(f'<div class="chat-message {role_style}">{message["content"]}</div>', 
-                       unsafe_allow_html=True)
+            
+            # Clear input and rerun to update chat
+            st.rerun()
 
 if __name__ == "__main__":
     main()
