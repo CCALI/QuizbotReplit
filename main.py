@@ -135,38 +135,31 @@ def main():
         
         # Message area with auto-scroll
         with chat_container:
-            messages_area = st.empty()
-            
             # Combine all messages into HTML
-            messages_html = ""
+            messages_html = '<div class="chat-container"><div class="message-area" id="message-area">'
+            
             for message in st.session_state.messages:
                 role_style = "user-message" if message["role"] == "user" else "bot-message"
                 icon = "👤" if message["role"] == "user" else "🤖"
-                messages_html += f"""
+                messages_html += f'''
                     <div class="chat-message {role_style}">
                         <div class="chat-icon">{icon}</div>
                         <div class="message-content">{message["content"]}</div>
                     </div>
-                """
+                '''
             
-            # Display all messages in the empty container
-            messages_area.markdown(f"""
-                <div class="chat-container">
-                    <div class="message-area" id="message-area">
-                        {messages_html}
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+            messages_html += '</div></div>'
+            
+            # Display all messages
+            st.markdown(messages_html, unsafe_allow_html=True)
             
             # Input area at the bottom
-            input_container = st.container()
-            with input_container:
-                cols = st.columns([8, 2])
-                with cols[0]:
-                    user_input = st.text_input("", 
-                                             placeholder="Type your response here...", 
-                                             key="user_input", 
-                                             label_visibility="collapsed")
+            st.markdown('<div class="chat-input">', unsafe_allow_html=True)
+            user_input = st.text_input("", 
+                                     placeholder="Type your response here...", 
+                                     key="user_input", 
+                                     label_visibility="collapsed")
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Auto-scroll script
         st.markdown("""
@@ -177,7 +170,6 @@ def main():
                         messageArea.scrollTop = messageArea.scrollHeight;
                     }
                 }
-                // Call immediately and after a short delay to ensure content is loaded
                 scrollToBottom();
                 setTimeout(scrollToBottom, 100);
             </script>
