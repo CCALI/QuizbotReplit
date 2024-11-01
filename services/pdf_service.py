@@ -75,7 +75,7 @@ class PDFService:
                             tables.append(processed_table)
                             
         except Exception as e:
-            st.warning(f"Could not extract tables from {pdf_path}: {str(e)}")
+            st.error(f"Error extracting tables: {str(e)}")
         return tables
 
     def _process_merged_cells(self, table: list) -> list:
@@ -118,23 +118,22 @@ class PDFService:
                     })
                     
         except Exception as e:
-            st.warning(f"Could not extract images from {pdf_path}: {str(e)}")
+            st.error(f"Error extracting images: {str(e)}")
         return images
 
     def extract_text_with_formatting(self, folder_path: str) -> tuple:
         """Extract text from all PDFs in the folder while preserving formatting"""
         try:
+            st.write("Building the Quiz")
+            
             if not os.path.exists(folder_path):
                 st.error(f"Readings folder not found: {folder_path}")
                 return "", [], [], {}
                 
             pdf_files = [f for f in os.listdir(folder_path) if f.endswith('.pdf')]
             if not pdf_files:
-                st.warning("No PDF files found in Readings folder")
+                st.error("No PDF files found in Readings folder")
                 return "", [], [], {}
-                
-            # Log found files
-            st.write(f"Found PDF files: {pdf_files}")
             
             all_text = []
             all_tables = []
@@ -143,7 +142,6 @@ class PDFService:
             
             for filename in pdf_files:
                 file_path = os.path.join(folder_path, filename)
-                
                 try:
                     # Extract content from each PDF
                     text, tables, images, footnotes = self._extract_single_pdf(file_path)
@@ -161,22 +159,18 @@ class PDFService:
                         f"{filename}:{k}": v for k, v in footnotes.items()
                     })
                     
-                    st.write(f"Successfully processed {filename}")
-                    
                 except Exception as e:
-                    st.warning(f"Error processing {filename}: {str(e)}")
-                    st.write(f"Full error details for {filename}: {repr(e)}")
+                    st.error(f"Error processing {filename}: {str(e)}")
                     continue
             
             if not all_text:
-                st.warning("No text could be extracted from any PDF files")
+                st.error("No text could be extracted from any PDF files")
                 return "", [], [], {}
                 
             return '\n'.join(all_text), all_tables, all_images, all_footnotes
             
         except Exception as e:
             st.error(f"Error accessing folder {folder_path}: {str(e)}")
-            st.write(f"Full error details: {repr(e)}")
             return "", [], [], {}
 
     def _extract_single_pdf(self, pdf_path: str) -> tuple:
@@ -249,7 +243,7 @@ class PDFService:
             return '\n'.join(text_content), tables, images, footnotes
         
         except Exception as e:
-            st.error(f"Error processing {pdf_path}: {str(e)}")
+            st.error(f"Error processing PDF: {str(e)}")
             return "", [], [], {}
 
     def _process_line(self, line: str) -> str:
