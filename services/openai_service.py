@@ -8,7 +8,7 @@ class OpenAIService:
     def generate_questions(self, text: str) -> list:
         prompt = f"Generate 3 Socratic questions based on this text: {text}"
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "text"}
         )
@@ -22,7 +22,7 @@ class OpenAIService:
         messages = [{"role": "system", "content": system_prompt}] + conversation_history
         
         response = self.client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=messages,
             response_format={"type": "text"}
         )

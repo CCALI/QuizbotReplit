@@ -1,13 +1,34 @@
 import PyPDF2
 import io
+import os
+from datetime import datetime
 
 class PDFService:
-    @staticmethod
-    def extract_text(pdf_file) -> str:
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_file.read()))
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text()
+    def __init__(self):
+        self.readings_folder = 'Readings'
+
+    def save_pdf(self, pdf_file) -> str:
+        """Save the uploaded PDF to the Readings folder and return the saved file path"""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{pdf_file.name}"
+        file_path = os.path.join(self.readings_folder, filename)
+        
+        with open(file_path, 'wb') as f:
+            f.write(pdf_file.getvalue())
+        
+        return file_path
+
+    def extract_text(self, pdf_file) -> str:
+        """Extract text from a PDF file"""
+        # Save the PDF first
+        file_path = self.save_pdf(pdf_file)
+        
+        # Then read and extract text
+        with open(file_path, 'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
         return text
 
     @staticmethod
