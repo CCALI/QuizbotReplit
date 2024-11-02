@@ -27,7 +27,13 @@ def init_db():
         )
     """)
     
-    # Create conversations table with additional analytics fields and title
+    # Add title column to conversations table if it doesn't exist
+    cur.execute("""
+        ALTER TABLE conversations 
+        ADD COLUMN IF NOT EXISTS title VARCHAR(200)
+    """)
+    
+    # Create conversations table with additional analytics fields
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id SERIAL PRIMARY KEY,

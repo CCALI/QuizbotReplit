@@ -42,7 +42,7 @@ class DatabaseOperations:
         cur.execute("""
             SELECT 
                 c.id,
-                c.title,
+                COALESCE(c.title, 'Conversation ' || to_char(c.start_time, 'YYYY-MM-DD HH24:MI')) as title,
                 c.context,
                 c.start_time,
                 c.end_time,
@@ -55,7 +55,7 @@ class DatabaseOperations:
             GROUP BY c.id
             ORDER BY 
                 CASE WHEN c.completion_status = 'ongoing' THEN 0 ELSE 1 END,
-                last_activity DESC
+                last_activity DESC NULLS LAST
         """, (user_id,))
         
         conversations = cur.fetchall()
