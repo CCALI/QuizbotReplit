@@ -9,6 +9,8 @@ import re
 import fitz  # PyMuPDF for better PDF handling
 import numpy as np
 from PIL import Image
+import hashlib
+from functools import lru_cache
 
 class PDFService:
     def __init__(self):
@@ -16,27 +18,31 @@ class PDFService:
         self.supported_formats = ['.pdf']
         self.math_pattern = re.compile(r'\$.*?\$|\\\[.*?\\\]|\\\(.*?\\\)')
         self.footnote_pattern = re.compile(r'\[\d+\]|\(\d+\)')
+        self.cache = {}
+        self.chunk_size = 1500  # Optimized chunk size
 
+    def _calculate_file_hash(self, file_path: str) -> str:
+        """Calculate MD5 hash of a file"""
+        hash_md5 = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    @lru_cache(maxsize=20)
     def clean_text(self, text: str) -> str:
-        """Clean and preprocess extracted text"""
-        # Remove extra whitespace while preserving paragraph breaks
+        """Clean and preprocess extracted text with caching"""
         text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'\s+', ' ', text)
-        
-        # Preserve list formatting
         text = re.sub(r'(?<=\n)\s*[•∙◦○●]\s*', '• ', text)
         text = re.sub(r'(?<=\n)\s*(\d+\.|\w+\.)\s+', r'\1 ', text)
-        
-        # Fix common OCR errors
         text = text.replace('|', 'I').replace('0', 'O')
-        
         return text.strip()
 
     def extract_equations(self, text: str) -> tuple:
         """Extract and preserve mathematical equations"""
         equations = self.math_pattern.findall(text)
-        # Replace equations with placeholders
         text_with_placeholders = self.math_pattern.sub('__EQUATION__', text)
         return text_with_placeholders, equations
 
@@ -52,7 +58,6 @@ class PDFService:
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 for page in pdf.pages:
-                    # Extract tables with settings for merged cells
                     found_tables = page.extract_tables(
                         table_settings={
                             "vertical_strategy": "text",
@@ -70,7 +75,6 @@ class PDFService:
                     
                     if found_tables:
                         for table in found_tables:
-                            # Process merged cells
                             processed_table = self._process_merged_cells(table)
                             tables.append(processed_table)
                             
@@ -88,7 +92,6 @@ class PDFService:
             processed_row = []
             for j, cell in enumerate(row):
                 if cell is None and i > 0:
-                    # Check for vertically merged cells
                     processed_row.append(table[i-1][j])
                 else:
                     processed_row.append(cell or '')
@@ -109,7 +112,6 @@ class PDFService:
                     base_image = doc.extract_image(xref)
                     image_data = base_image["image"]
                     
-                    # Convert to PIL Image for processing
                     image = Image.open(io.BytesIO(image_data))
                     images.append({
                         'page': page_num + 1,
@@ -122,9 +124,10 @@ class PDFService:
         return images
 
     def extract_text_with_formatting(self, folder_path: str) -> tuple:
-        """Extract text from all PDFs in the folder while preserving formatting"""
+        """Extract text from PDFs with progress tracking and caching"""
         try:
-            st.write("Building the Quiz")
+            progress_bar = st.progress(0)
+            st.write("Processing PDF documents...")
             
             if not os.path.exists(folder_path):
                 st.error(f"Readings folder not found: {folder_path}")
@@ -140,21 +143,26 @@ class PDFService:
             all_images = []
             all_footnotes = {}
             
-            for filename in pdf_files:
+            for i, filename in enumerate(pdf_files):
                 file_path = os.path.join(folder_path, filename)
+                progress = (i + 1) / len(pdf_files)
+                progress_bar.progress(progress)
+                
                 try:
-                    # Extract content from each PDF
-                    text, tables, images, footnotes = self._extract_single_pdf(file_path)
+                    file_hash = self._calculate_file_hash(file_path)
+                    cache_key = f"{file_hash}_{os.path.getsize(file_path)}"
                     
-                    # Add document separator and filename
+                    if cache_key in self.cache:
+                        cached_data = self.cache[cache_key]
+                        text, tables, images, footnotes = cached_data
+                    else:
+                        text, tables, images, footnotes = self._extract_single_pdf(file_path)
+                        self.cache[cache_key] = (text, tables, images, footnotes)
+                    
                     all_text.append(f"\n=== Document: {filename} ===\n")
                     all_text.append(text)
-                    
-                    # Extend tables and images lists
                     all_tables.extend(tables)
                     all_images.extend(images)
-                    
-                    # Update footnotes dictionary
                     all_footnotes.update({
                         f"{filename}:{k}": v for k, v in footnotes.items()
                     })
@@ -162,6 +170,8 @@ class PDFService:
                 except Exception as e:
                     st.error(f"Error processing {filename}: {str(e)}")
                     continue
+            
+            progress_bar.empty()
             
             if not all_text:
                 st.error("No text could be extracted from any PDF files")
@@ -173,52 +183,46 @@ class PDFService:
             st.error(f"Error accessing folder {folder_path}: {str(e)}")
             return "", [], [], {}
 
+    def _process_line(self, line: str) -> str:
+        """Process a line of text, handling special formatting"""
+        line_with_placeholders, equations = self.extract_equations(line)
+        cleaned_line = self.clean_text(line_with_placeholders)
+        final_line = self.restore_equations(cleaned_line, equations)
+        return final_line
+
     def _extract_single_pdf(self, pdf_path: str) -> tuple:
-        """Extract text and formatting from a single PDF file"""
+        """Extract content from a single PDF with optimized processing"""
         text_content = []
         tables = []
         images = []
         footnotes = {}
         
         try:
-            # Extract tables and images first
             tables = self.extract_tables(pdf_path)
             images = self.extract_images(pdf_path)
             
-            # Extract text with formatting
             with pdfplumber.open(pdf_path) as pdf:
                 for page_num, page in enumerate(pdf.pages):
-                    # Extract words with position and font information
                     words = page.extract_words(
                         keep_blank_chars=True,
                         use_text_flow=True,
                         x_tolerance=3,
-                        y_tolerance=3,
-                        extra_attrs=['fontname', 'size']
+                        y_tolerance=3
                     )
                     
-                    # Process text by lines with formatting
+                    if not words:
+                        continue
+                    
                     current_line = []
-                    current_format = None
                     last_y = None
                     
                     for word in words:
-                        # Detect formatting changes
-                        word_format = {
-                            'font': word['fontname'],
-                            'size': word['size']
-                        }
-                        
-                        # Check for new line or format change
-                        if (last_y is not None and abs(word['top'] - last_y) > 3) or \
-                           (current_format and word_format != current_format):
-                            # Process and add the current line
+                        if last_y is not None and abs(word['top'] - last_y) > 3:
                             processed_line = self._process_line(''.join(current_line))
                             if processed_line:
                                 text_content.append(processed_line)
                             current_line = []
                         
-                        # Handle footnotes
                         footnote_match = self.footnote_pattern.match(word['text'])
                         if footnote_match:
                             footnote_num = footnote_match.group()
@@ -228,17 +232,12 @@ class PDFService:
                             }
                         
                         current_line.append(word['text'])
-                        current_format = word_format
                         last_y = word['top']
                     
-                    # Add any remaining content
                     if current_line:
                         processed_line = self._process_line(''.join(current_line))
                         if processed_line:
                             text_content.append(processed_line)
-                    
-                    # Add page break marker
-                    text_content.append('\n---\n')
             
             return '\n'.join(text_content), tables, images, footnotes
         
@@ -246,64 +245,48 @@ class PDFService:
             st.error(f"Error processing PDF: {str(e)}")
             return "", [], [], {}
 
-    def _process_line(self, line: str) -> str:
-        """Process a line of text, handling special formatting"""
-        # Extract and preserve equations
-        line_with_placeholders, equations = self.extract_equations(line)
-        
-        # Clean the text
-        cleaned_line = self.clean_text(line_with_placeholders)
-        
-        # Restore equations
-        final_line = self.restore_equations(cleaned_line, equations)
-        
-        return final_line
-
-    def chunk_text(self, text: str, chunk_size: int = 2000) -> list:
-        """Split text into manageable chunks while preserving context"""
-        # Split text into paragraphs
+    def chunk_text(self, text: str, chunk_size: int = None) -> list:
+        """Split text into optimized chunks"""
+        if chunk_size is None:
+            chunk_size = self.chunk_size
+            
         paragraphs = text.split('\n\n')
         chunks = []
         current_chunk = []
         current_length = 0
         
         for paragraph in paragraphs:
-            # Handle special markers (equations, tables, etc.)
             special_content = any(marker in paragraph for marker in 
                                ['__EQUATION__', '---', '|', '•'])
             
-            # If it's special content or too long, handle differently
-            if special_content or len(paragraph) > chunk_size:
-                # First, add any accumulated content
+            current_chunk_size = chunk_size // 2 if special_content else chunk_size
+            
+            if special_content or len(paragraph) > current_chunk_size:
                 if current_chunk:
                     chunks.append('\n\n'.join(current_chunk))
                     current_chunk = []
                     current_length = 0
                 
-                # Handle long paragraphs
-                if len(paragraph) > chunk_size:
-                    # Split while preserving special content
-                    words = paragraph.split()
+                if len(paragraph) > current_chunk_size:
+                    sentences = re.split(r'(?<=[.!?])\s+', paragraph)
                     temp_chunk = []
                     temp_length = 0
                     
-                    for word in words:
-                        word_length = len(word) + 1
-                        if temp_length + word_length > chunk_size:
-                            chunks.append(' '.join(temp_chunk))
-                            temp_chunk = [word]
-                            temp_length = word_length
+                    for sentence in sentences:
+                        if temp_length + len(sentence) > current_chunk_size:
+                            if temp_chunk:
+                                chunks.append(' '.join(temp_chunk))
+                            temp_chunk = [sentence]
+                            temp_length = len(sentence)
                         else:
-                            temp_chunk.append(word)
-                            temp_length += word_length
+                            temp_chunk.append(sentence)
+                            temp_length += len(sentence)
                     
                     if temp_chunk:
                         chunks.append(' '.join(temp_chunk))
                 else:
-                    # Add special content as its own chunk
                     chunks.append(paragraph)
             
-            # Normal paragraph handling
             elif current_length + len(paragraph) + 2 > chunk_size:
                 chunks.append('\n\n'.join(current_chunk))
                 current_chunk = [paragraph]
@@ -312,7 +295,6 @@ class PDFService:
                 current_chunk.append(paragraph)
                 current_length += len(paragraph) + 2
         
-        # Add any remaining content
         if current_chunk:
             chunks.append('\n\n'.join(current_chunk))
         
@@ -328,24 +310,19 @@ class PDFService:
             if not table:
                 continue
             
-            # Calculate column widths
             col_widths = [max(len(str(cell)) for cell in col) 
                          for col in zip(*table)]
             
-            # Create header separator
             header_sep = '+' + '+'.join('-' * (w + 2) for w in col_widths) + '+'
             
-            # Format table
             formatted_table = [header_sep]
             for i, row in enumerate(table):
-                # Format cells
                 formatted_row = '|' + '|'.join(
                     f' {str(cell):<{width}} ' 
                     for cell, width in zip(row, col_widths)
                 ) + '|'
                 formatted_table.append(formatted_row)
                 
-                # Add separator after header or each row
                 if i == 0 or i == len(table) - 1:
                     formatted_table.append(header_sep)
                 
