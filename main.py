@@ -10,7 +10,6 @@ from database.analytics import AnalyticsOperations
 from services.openai_service import OpenAIService
 from services.pdf_service import PDFService
 from utils.auth import Auth
-from pages.instructor import run_instructor_dashboard
 
 # Initialize services
 openai_service = OpenAIService()
@@ -25,8 +24,6 @@ if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'user_name' not in st.session_state:
     st.session_state.user_name = None
-if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
 if 'conversation_id' not in st.session_state:
     st.session_state.conversation_id = None
 if 'messages' not in st.session_state:
@@ -143,11 +140,10 @@ def main():
                 submit = st.form_submit_button("Login")
                 
                 if submit:
-                    success, user_id, first_name, last_name, role = Auth.verify_user(username, password)
+                    success, user_id, first_name, last_name, _ = Auth.verify_user(username, password)
                     if success:
                         st.session_state.user_id = user_id
                         st.session_state.user_name = f"{first_name or ''} {last_name or ''}".strip() or username
-                        st.session_state.user_role = role
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
@@ -158,11 +154,10 @@ def main():
                 new_password = st.text_input("Choose Password", type="password")
                 first_name = st.text_input("First Name")
                 last_name = st.text_input("Last Name")
-                role = st.selectbox("Role", ["student", "instructor"])
                 submit = st.form_submit_button("Register")
                 
                 if submit:
-                    if Auth.register_user(new_username, new_password, first_name, last_name, role):
+                    if Auth.register_user(new_username, new_password, first_name, last_name):
                         st.success("Registration successful! Please login.")
                     else:
                         st.error("Registration failed. Username might be taken.")
@@ -170,11 +165,6 @@ def main():
 
     # Main application layout
     st.title("QuizBot")
-    
-    # Handle instructor view
-    if st.session_state.user_role == 'instructor':
-        run_instructor_dashboard()
-        return
     
     if not st.session_state.quiz_started:
         st.write("Welcome. Select 'Begin Quiz' to start a new quiz or continue an existing conversation.")
@@ -209,7 +199,7 @@ def main():
     if not st.session_state.quiz_started:
         show_conversation_list()
         return
-
+    
     # Chat interface using Streamlit's native components
     if st.session_state.quiz_started and st.session_state.conversation_id:
         chat_container = st.container()

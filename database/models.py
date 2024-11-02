@@ -28,19 +28,6 @@ def init_db():
         )
     """)
     
-    # Update role column if it exists, add if it doesn't
-    cur.execute('''
-        DO $$ 
-        BEGIN 
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                          WHERE table_name='users' AND column_name='role') THEN
-                ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'student';
-            ELSE
-                ALTER TABLE users ALTER COLUMN role SET DEFAULT 'student';
-            END IF;
-        END $$;
-    ''')
-    
     # Create or update conversations table with additional analytics fields
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
@@ -56,17 +43,6 @@ def init_db():
             sentence_count INTEGER DEFAULT 0
         )
     """)
-    
-    # Add completion_status column if it doesn't exist
-    cur.execute('''
-        DO $$ 
-        BEGIN 
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                          WHERE table_name='conversations' AND column_name='completion_status') THEN
-                ALTER TABLE conversations ADD COLUMN completion_status VARCHAR(20) DEFAULT 'ongoing';
-            END IF;
-        END $$;
-    ''')
     
     # Create messages table with additional analytics fields
     cur.execute("""

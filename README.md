@@ -6,6 +6,7 @@ A Socratic learning QuizBot using Streamlit and OpenAI API for PDF-based educati
 Created by Sean Harrington  
 Director of Technology Innovation  
 University of Oklahoma College of Law
+https://law.ou.edu/faculty-and-staff/sean-harrington
 
 ## Features
 - PDF processing with support for complex formatting
