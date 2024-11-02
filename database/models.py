@@ -15,7 +15,7 @@ def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Create users table with full name fields
+    # Create users table with full name fields and role
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -23,23 +23,23 @@ def init_db():
             password_hash VARCHAR(200) NOT NULL,
             first_name VARCHAR(100),
             last_name VARCHAR(100),
+            role VARCHAR(20) DEFAULT 'student',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     
-    # Add title column to conversations table if it doesn't exist
+    # Add role column if it doesn't exist
     cur.execute("""
-        ALTER TABLE conversations 
-        ADD COLUMN IF NOT EXISTS title VARCHAR(200)
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='users' AND column_name='role') THEN
+                ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'student';
+            END IF;
+        END $$;
     """)
     
-    # Add context column to conversations table if it doesn't exist
-    cur.execute("""
-        ALTER TABLE conversations 
-        ADD COLUMN IF NOT EXISTS context TEXT
-    """)
-    
-    # Create conversations table with additional analytics fields
+    # Create or update conversations table with additional analytics fields
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id SERIAL PRIMARY KEY,
