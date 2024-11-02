@@ -321,3 +321,13 @@ This road map outlines the steps to develop a QuizBot application using Python o
 ---
 
 **Note:** Replace placeholders and dummy data with actual implementation details as needed. Ensure that all third-party libraries and APIs are properly configured and that you have the necessary permissions and licenses to use them.
+
+# Production
+
+Yes, I want us to presume that the quiz will be about 10-15 minutes long. Determine the average amount of interaction that a student would have (in words) and create a grade from 1-3 (3 being high interaction, 1 being low interaction). Low interaction (1) would be about 2 chats that are 2 sentences each.
+
+We also need to start the process of cleaning this up for production. This will be hosted on Replit but it will also be hosted locally. We need a clear ReadMe.md file that explains how to use it and gives it an MIT license. We need to make sure that this isn't so specific to Replit that is cannot be hosted locally.
+
+## Owner
+
+It should be credited to Sean Harrington, the Director of Technology Innovation at the University of Oklahoma College of Law.

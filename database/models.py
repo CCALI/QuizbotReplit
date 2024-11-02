@@ -36,7 +36,8 @@ def init_db():
             end_time TIMESTAMP,
             response_count INTEGER DEFAULT 0,
             average_response_time FLOAT DEFAULT 0,
-            completion_status VARCHAR(20) DEFAULT 'ongoing'
+            completion_status VARCHAR(20) DEFAULT 'ongoing',
+            sentence_count INTEGER DEFAULT 0
         )
     """)
     
@@ -49,11 +50,12 @@ def init_db():
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             response_time INTEGER,
-            word_count INTEGER
+            word_count INTEGER,
+            sentence_count INTEGER
         )
     """)
     
-    # Create analytics_summary table
+    # Create analytics_summary table with interaction grade
     cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics_summary (
             id SERIAL PRIMARY KEY,
@@ -64,6 +66,8 @@ def init_db():
             average_session_length FLOAT DEFAULT 0,
             last_active TIMESTAMP,
             completion_rate FLOAT DEFAULT 0,
+            interaction_grade INTEGER DEFAULT 1,
+            average_word_count FLOAT DEFAULT 0,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)

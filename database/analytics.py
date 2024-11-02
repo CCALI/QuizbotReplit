@@ -2,8 +2,17 @@ from datetime import datetime, timedelta
 from .models import get_db_connection
 import pandas as pd
 import numpy as np
+import re
 
 class AnalyticsOperations:
+    @staticmethod
+    def count_sentences(text):
+        """Count the number of sentences in a text"""
+        # Simple sentence counting based on period, exclamation, and question marks
+        sentences = re.split(r'[.!?]+', text)
+        # Filter out empty strings
+        return len([s for s in sentences if s.strip()])
+
     @staticmethod
     def update_message_analytics(message_id):
         """Update analytics for a single message"""
@@ -11,7 +20,7 @@ class AnalyticsOperations:
         cur = conn.cursor()
         
         try:
-            # Calculate message metrics
+            # Calculate message metrics including sentence count
             cur.execute("""
                 WITH message_metrics AS (
                     SELECT 
@@ -22,7 +31,8 @@ class AnalyticsOperations:
                         EXTRACT(EPOCH FROM (m.timestamp - LAG(m.timestamp) OVER (
                             PARTITION BY m.conversation_id 
                             ORDER BY m.timestamp
-                        ))) as response_time
+                        ))) as response_time,
+                        m.content as message_content
                     FROM messages m
                     JOIN conversations c ON m.conversation_id = c.id
                     WHERE m.id = %s
@@ -33,10 +43,29 @@ class AnalyticsOperations:
                     response_time = CASE 
                         WHEN mm.response_time > 3600 THEN NULL 
                         ELSE mm.response_time 
-                    END
+                    END,
+                    sentence_count = %s
                 FROM message_metrics mm
                 WHERE m.id = mm.id
-            """, (message_id,))
+                RETURNING mm.message_content, mm.conversation_id
+            """, (message_id, AnalyticsOperations.count_sentences(message_content)))
+            
+            # Get the message content and conversation_id
+            result = cur.fetchone()
+            if result:
+                message_content, conversation_id = result
+                
+                # Update conversation sentence count
+                cur.execute("""
+                    UPDATE conversations
+                    SET sentence_count = (
+                        SELECT SUM(sentence_count)
+                        FROM messages
+                        WHERE conversation_id = %s
+                        AND role = 'user'
+                    )
+                    WHERE id = %s
+                """, (conversation_id, conversation_id))
             
             conn.commit()
         finally:
@@ -55,7 +84,8 @@ class AnalyticsOperations:
                     SELECT 
                         conversation_id,
                         COUNT(*) FILTER (WHERE role = 'user') as response_count,
-                        AVG(response_time) FILTER (WHERE response_time < 3600) as avg_response_time
+                        AVG(response_time) FILTER (WHERE response_time < 3600) as avg_response_time,
+                        SUM(sentence_count) FILTER (WHERE role = 'user') as total_sentences
                     FROM messages
                     WHERE conversation_id = %s
                     GROUP BY conversation_id
@@ -63,7 +93,8 @@ class AnalyticsOperations:
                 UPDATE conversations c
                 SET 
                     response_count = cm.response_count,
-                    average_response_time = cm.avg_response_time
+                    average_response_time = cm.avg_response_time,
+                    sentence_count = cm.total_sentences
                 FROM conversation_metrics cm
                 WHERE c.id = cm.conversation_id
             """, (conversation_id,))
@@ -72,6 +103,16 @@ class AnalyticsOperations:
         finally:
             cur.close()
             conn.close()
+
+    @staticmethod
+    def calculate_interaction_grade(sentence_count):
+        """Calculate interaction grade based on sentence count"""
+        if sentence_count <= 4:  # ≤ 4 sentences (2 chats × 2 sentences)
+            return 1
+        elif sentence_count <= 8:  # 5-8 sentences
+            return 2
+        else:  # > 8 sentences
+            return 3
 
     @staticmethod
     def update_user_analytics(user_id):
@@ -91,7 +132,9 @@ class AnalyticsOperations:
                             FILTER (WHERE c.end_time IS NOT NULL) as avg_session_length,
                         MAX(m.timestamp) as last_active,
                         CAST(COUNT(*) FILTER (WHERE c.completion_status = 'completed') AS FLOAT) / 
-                            NULLIF(COUNT(*), 0) * 100 as completion_rate
+                            NULLIF(COUNT(*), 0) * 100 as completion_rate,
+                        SUM(c.sentence_count) as total_sentences,
+                        AVG(m.word_count) FILTER (WHERE m.role = 'user') as avg_word_count
                     FROM conversations c
                     LEFT JOIN messages m ON c.id = m.conversation_id
                     WHERE c.user_id = %s
@@ -100,12 +143,15 @@ class AnalyticsOperations:
                 INSERT INTO analytics_summary (
                     user_id, total_conversations, total_messages, 
                     average_response_time, average_session_length,
-                    last_active, completion_rate, updated_at
+                    last_active, completion_rate, interaction_grade,
+                    average_word_count, updated_at
                 )
                 SELECT 
                     user_id, total_conversations, total_messages,
                     avg_response_time, avg_session_length,
-                    last_active, completion_rate, CURRENT_TIMESTAMP
+                    last_active, completion_rate, 
+                    %s as interaction_grade,
+                    avg_word_count, CURRENT_TIMESTAMP
                 FROM user_metrics
                 ON CONFLICT (user_id) DO UPDATE 
                 SET 
@@ -115,8 +161,10 @@ class AnalyticsOperations:
                     average_session_length = EXCLUDED.average_session_length,
                     last_active = EXCLUDED.last_active,
                     completion_rate = EXCLUDED.completion_rate,
+                    interaction_grade = EXCLUDED.interaction_grade,
+                    average_word_count = EXCLUDED.average_word_count,
                     updated_at = CURRENT_TIMESTAMP
-            """, (user_id,))
+            """, (user_id, AnalyticsOperations.calculate_interaction_grade(total_sentences)))
             
             conn.commit()
         finally:
@@ -140,7 +188,9 @@ class AnalyticsOperations:
                         ROUND(a.average_response_time::numeric, 2) as avg_response_time,
                         ROUND(a.average_session_length::numeric, 2) as avg_session_length,
                         a.last_active,
-                        ROUND(a.completion_rate::numeric, 2) as completion_rate
+                        ROUND(a.completion_rate::numeric, 2) as completion_rate,
+                        a.interaction_grade,
+                        ROUND(a.average_word_count::numeric, 2) as avg_word_count
                     FROM analytics_summary a
                     JOIN users u ON a.user_id = u.id
                     WHERE a.user_id = %s
@@ -155,9 +205,12 @@ class AnalyticsOperations:
                         COUNT(DISTINCT c.user_id) as active_users,
                         ROUND(AVG(m.response_time) FILTER (WHERE m.response_time < 3600)::numeric, 2) as avg_response_time,
                         ROUND(AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time)) / 60) 
-                            FILTER (WHERE c.end_time IS NOT NULL)::numeric, 2) as avg_session_length
+                            FILTER (WHERE c.end_time IS NOT NULL)::numeric, 2) as avg_session_length,
+                        ROUND(AVG(m.word_count) FILTER (WHERE m.role = 'user')::numeric, 2) as avg_word_count,
+                        MODE() WITHIN GROUP (ORDER BY a.interaction_grade) as most_common_grade
                     FROM messages m
                     JOIN conversations c ON m.conversation_id = c.id
+                    JOIN analytics_summary a ON c.user_id = a.user_id
                     WHERE m.timestamp >= CURRENT_DATE - INTERVAL '%s days'
                     GROUP BY DATE(m.timestamp)
                     ORDER BY date DESC

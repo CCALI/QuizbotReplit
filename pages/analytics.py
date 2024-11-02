@@ -33,11 +33,12 @@ def run_analytics_dashboard():
     # Convert to DataFrame
     df = pd.DataFrame(analytics_data, columns=[
         'date', 'conversations', 'active_users', 
-        'avg_response_time', 'avg_session_length'
+        'avg_response_time', 'avg_session_length',
+        'avg_word_count', 'most_common_grade'
     ])
     
     # Overview metrics
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric(
             "Total Conversations",
@@ -55,6 +56,12 @@ def run_analytics_dashboard():
             "Avg. Session Length",
             f"{df['avg_session_length'].mean():.1f} min",
             f"{df['avg_session_length'].std():.1f} min std"
+        )
+    with col4:
+        st.metric(
+            "Avg. Word Count",
+            f"{df['avg_word_count'].mean():.1f}",
+            f"{df['avg_word_count'].std():.1f} std"
         )
     
     # Engagement Trends
@@ -80,17 +87,47 @@ def run_analytics_dashboard():
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # Response Time Analysis
-    st.subheader("Response Time Analysis")
-    fig = px.box(
-        df,
-        y='avg_response_time',
-        title='Response Time Distribution'
-    )
-    fig.update_layout(
-        yaxis_title='Average Response Time (seconds)'
+    # Interaction Grade Distribution
+    st.subheader("Interaction Grade Distribution")
+    grade_counts = df['most_common_grade'].value_counts()
+    fig = px.pie(
+        values=grade_counts.values,
+        names=grade_counts.index,
+        title='Distribution of Interaction Grades',
+        labels={'most_common_grade': 'Grade', 'value': 'Count'},
+        color_discrete_sequence=px.colors.qualitative.Set3
     )
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Response Analysis
+    st.subheader("Response Analysis")
+    cols = st.columns(2)
+    
+    with cols[0]:
+        # Response Time Box Plot
+        fig = px.box(
+            df,
+            y='avg_response_time',
+            title='Response Time Distribution'
+        )
+        fig.update_layout(
+            yaxis_title='Average Response Time (seconds)'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with cols[1]:
+        # Word Count Trends
+        fig = px.line(
+            df,
+            x='date',
+            y='avg_word_count',
+            title='Average Word Count Over Time'
+        )
+        fig.update_layout(
+            xaxis_title='Date',
+            yaxis_title='Average Word Count'
+        )
+        st.plotly_chart(fig, use_container_width=True)
     
     # Session Length Trends
     st.subheader("Session Length Trends")
