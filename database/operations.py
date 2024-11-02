@@ -15,12 +15,18 @@ class DatabaseOperations:
         conn.close()
 
     @staticmethod
-    def create_conversation(user_id: int) -> int:
+    def create_conversation(user_id: int, title: str = None, context: str = None) -> int:
         conn = get_db_connection()
         cur = conn.cursor()
+        
+        # Generate default title if none provided
+        if not title:
+            title = f"Conversation {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            
         cur.execute(
-            "INSERT INTO conversations (user_id) VALUES (%s) RETURNING id",
-            (user_id,)
+            """INSERT INTO conversations (user_id, title, context) 
+               VALUES (%s, %s, %s) RETURNING id""",
+            (user_id, title, context)
         )
         conversation_id = cur.fetchone()[0]
         conn.commit()
@@ -29,11 +35,68 @@ class DatabaseOperations:
         return conversation_id
 
     @staticmethod
+    def get_user_conversations(user_id: int):
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT 
+                c.id,
+                c.title,
+                c.context,
+                c.start_time,
+                c.end_time,
+                c.completion_status,
+                COUNT(m.id) as message_count,
+                MAX(m.timestamp) as last_activity
+            FROM conversations c
+            LEFT JOIN messages m ON c.id = m.conversation_id
+            WHERE c.user_id = %s
+            GROUP BY c.id
+            ORDER BY 
+                CASE WHEN c.completion_status = 'ongoing' THEN 0 ELSE 1 END,
+                last_activity DESC
+        """, (user_id,))
+        
+        conversations = cur.fetchall()
+        cur.close()
+        conn.close()
+        return conversations
+
+    @staticmethod
+    def update_conversation(conversation_id: int, title: str = None, context: str = None):
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        update_fields = []
+        params = []
+        
+        if title is not None:
+            update_fields.append("title = %s")
+            params.append(title)
+        if context is not None:
+            update_fields.append("context = %s")
+            params.append(context)
+            
+        if update_fields:
+            query = f"""
+                UPDATE conversations 
+                SET {', '.join(update_fields)}
+                WHERE id = %s
+            """
+            params.append(conversation_id)
+            cur.execute(query, params)
+            conn.commit()
+            
+        cur.close()
+        conn.close()
+
+    @staticmethod
     def end_conversation(conversation_id: int):
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            "UPDATE conversations SET end_time = %s WHERE id = %s",
+            "UPDATE conversations SET end_time = %s, completion_status = 'completed' WHERE id = %s",
             (datetime.now(), conversation_id)
         )
         conn.commit()

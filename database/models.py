@@ -27,11 +27,13 @@ def init_db():
         )
     """)
     
-    # Create conversations table with additional analytics fields
+    # Create conversations table with additional analytics fields and title
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
+            title VARCHAR(200),
+            context TEXT,
             start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             end_time TIMESTAMP,
             response_count INTEGER DEFAULT 0,
