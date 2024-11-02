@@ -200,19 +200,19 @@ class AnalyticsOperations:
                 # Overall analytics
                 cur.execute("""
                     SELECT 
-                        DATE(m.timestamp) as date,
+                        DATE(c.start_time) as date,
                         COUNT(DISTINCT c.id) as conversations,
                         COUNT(DISTINCT c.user_id) as active_users,
-                        ROUND(AVG(m.response_time) FILTER (WHERE m.response_time < 3600)::numeric, 2) as avg_response_time,
+                        ROUND(AVG(NULLIF(m.response_time, 0)) FILTER (WHERE m.response_time < 3600)::numeric, 2) as avg_response_time,
                         ROUND(AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time)) / 60) 
                             FILTER (WHERE c.end_time IS NOT NULL)::numeric, 2) as avg_session_length,
                         ROUND(AVG(m.word_count) FILTER (WHERE m.role = 'user')::numeric, 2) as avg_word_count,
                         MODE() WITHIN GROUP (ORDER BY a.interaction_grade) as most_common_grade
-                    FROM messages m
-                    JOIN conversations c ON m.conversation_id = c.id
-                    JOIN analytics_summary a ON c.user_id = a.user_id
-                    WHERE m.timestamp >= CURRENT_DATE - INTERVAL '%s days'
-                    GROUP BY DATE(m.timestamp)
+                    FROM conversations c
+                    LEFT JOIN messages m ON c.id = m.conversation_id
+                    LEFT JOIN analytics_summary a ON c.user_id = a.user_id
+                    WHERE c.start_time >= CURRENT_DATE - INTERVAL '%s days'
+                    GROUP BY DATE(c.start_time)
                     ORDER BY date DESC
                 """, (days,))
                 return cur.fetchall()

@@ -328,6 +328,8 @@ Yes, I want us to presume that the quiz will be about 10-15 minutes long. Determ
 
 We also need to start the process of cleaning this up for production. This will be hosted on Replit but it will also be hosted locally. We need a clear ReadMe.md file that explains how to use it and gives it an MIT license. We need to make sure that this isn't so specific to Replit that is cannot be hosted locally.
 
+We also need a robust gitignore and an .env that has the requisite API key placeholders
+
 ## Owner
 
-It should be credited to Sean Harrington, the Director of Technology Innovation at the University of Oklahoma College of Law.
+It should be credited to Sean Harrington, the Director of Technology Innovation at the University of Oklahoma College of Law.\\
