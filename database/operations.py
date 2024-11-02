@@ -7,12 +7,14 @@ class DatabaseOperations:
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (%s, %s, %s)",
+            "INSERT INTO messages (conversation_id, role, content) VALUES (%s, %s, %s) RETURNING id",
             (conversation_id, role, content)
         )
+        message_id = cur.fetchone()[0]
         conn.commit()
         cur.close()
         conn.close()
+        return message_id
 
     @staticmethod
     def create_conversation(user_id: int, title: str = None, context: str = None) -> int:
@@ -43,7 +45,7 @@ class DatabaseOperations:
             SELECT 
                 c.id,
                 COALESCE(c.title, 'Conversation ' || to_char(c.start_time, 'YYYY-MM-DD HH24:MI')) as title,
-                c.context,
+                COALESCE(c.context, '') as context,
                 c.start_time,
                 c.end_time,
                 c.completion_status,
@@ -52,7 +54,7 @@ class DatabaseOperations:
             FROM conversations c
             LEFT JOIN messages m ON c.id = m.conversation_id
             WHERE c.user_id = %s
-            GROUP BY c.id
+            GROUP BY c.id, c.title, c.context, c.start_time, c.end_time, c.completion_status
             ORDER BY 
                 CASE WHEN c.completion_status = 'ongoing' THEN 0 ELSE 1 END,
                 last_activity DESC NULLS LAST
