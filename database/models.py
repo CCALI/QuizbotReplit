@@ -27,7 +27,7 @@ def init_db():
         )
     """)
     
-    # Create or update conversations table with additional analytics fields
+    # Create conversations table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS conversations (
             id SERIAL PRIMARY KEY,
@@ -43,7 +43,7 @@ def init_db():
         )
     """)
     
-    # Create messages table with additional analytics fields
+    # Create messages table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
@@ -51,13 +51,13 @@ def init_db():
             role VARCHAR(20) NOT NULL,
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            sentence_count INTEGER,
+            sentence_count INTEGER DEFAULT 0,
             response_time FLOAT DEFAULT NULL,
             word_count INTEGER DEFAULT 0
         )
     """)
     
-    # Create analytics_summary table with interaction grade
+    # Create analytics_summary table
     cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics_summary (
             id SERIAL PRIMARY KEY,
@@ -72,6 +72,64 @@ def init_db():
             average_word_count FLOAT DEFAULT 0,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+
+    # Add missing columns to messages table if they don't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'messages' AND column_name = 'sentence_count') THEN
+                ALTER TABLE messages ADD COLUMN sentence_count INTEGER DEFAULT 0;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'messages' AND column_name = 'response_time') THEN
+                ALTER TABLE messages ADD COLUMN response_time FLOAT DEFAULT NULL;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'messages' AND column_name = 'word_count') THEN
+                ALTER TABLE messages ADD COLUMN word_count INTEGER DEFAULT 0;
+            END IF;
+        END $$;
+    """)
+
+    # Add missing columns to conversations table if they don't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'conversations' AND column_name = 'response_count') THEN
+                ALTER TABLE conversations ADD COLUMN response_count INTEGER DEFAULT 0;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'conversations' AND column_name = 'average_response_time') THEN
+                ALTER TABLE conversations ADD COLUMN average_response_time FLOAT DEFAULT 0;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'conversations' AND column_name = 'sentence_count') THEN
+                ALTER TABLE conversations ADD COLUMN sentence_count INTEGER DEFAULT 0;
+            END IF;
+        END $$;
+    """)
+
+    # Add missing columns to analytics_summary table if they don't exist
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'analytics_summary' AND column_name = 'average_word_count') THEN
+                ALTER TABLE analytics_summary ADD COLUMN average_word_count FLOAT DEFAULT 0;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'analytics_summary' AND column_name = 'interaction_grade') THEN
+                ALTER TABLE analytics_summary ADD COLUMN interaction_grade INTEGER DEFAULT 1;
+            END IF;
+        END $$;
     """)
 
     conn.commit()
