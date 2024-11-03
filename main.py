@@ -70,8 +70,10 @@ def start_new_conversation():
                 # Generate questions from summary
                 initial_question = openai_service.generate_questions(summary, num_questions=1)[0]
                 
-                # Create conversation with context
-                title = f"Quiz on {', '.join(os.listdir('Readings'))}"
+                # Generate title from summary
+                title = openai_service.generate_title_summary(text) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                
+                # Create conversation with better title
                 st.session_state.conversation_id = db_ops.create_conversation(
                     st.session_state.user_id,
                     title=title,
