@@ -53,12 +53,11 @@ def init_db():
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             response_time INTEGER,
-            word_count INTEGER DEFAULT 0,
             sentence_count INTEGER
         )
     """)
     
-    # Add word_count column if it doesn't exist
+    # Check if word_count column exists before adding it
     cur.execute('''
         DO $$ 
         BEGIN 

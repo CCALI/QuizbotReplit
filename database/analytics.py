@@ -19,11 +19,11 @@ class AnalyticsOperations:
     @staticmethod
     def update_message_analytics(message_id):
         """Update analytics for a single message"""
-        conn = get_db_connection()
-        cur = conn.cursor()
-        message_content = None  # Initialize the variable
-        
         try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            message_content = None  # Initialize the variable
+            
             # Get message content and handle potential None result
             cur.execute("SELECT content FROM messages WHERE id = %s", (message_id,))
             result = cur.fetchone()
@@ -33,16 +33,18 @@ class AnalyticsOperations:
             if not message_content:
                 return
                 
+            # Calculate message metrics
             sentence_count = AnalyticsOperations.count_sentences(message_content)
+            word_count = len(message_content.split())
             
-            # Calculate message metrics including sentence count
+            # Update message metrics
             cur.execute("""
                 WITH message_metrics AS (
                     SELECT 
                         m.id,
                         m.conversation_id,
                         c.user_id,
-                        LENGTH(m.content) - LENGTH(REPLACE(m.content, ' ', '')) + 1 as word_count,
+                        %s as word_count,
                         EXTRACT(EPOCH FROM (m.timestamp - LAG(m.timestamp) OVER (
                             PARTITION BY m.conversation_id 
                             ORDER BY m.timestamp
@@ -62,7 +64,7 @@ class AnalyticsOperations:
                 FROM message_metrics mm
                 WHERE m.id = mm.id
                 RETURNING mm.conversation_id
-            """, (message_id, sentence_count))
+            """, (word_count, message_id, sentence_count))
             
             # Get the conversation_id
             result = cur.fetchone()
@@ -85,8 +87,10 @@ class AnalyticsOperations:
         except Exception as e:
             print(f"Error updating message analytics: {str(e)}")  # Use print instead of st.error
         finally:
-            cur.close()
-            conn.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
     @staticmethod
     def update_conversation_analytics(conversation_id):
@@ -115,6 +119,59 @@ class AnalyticsOperations:
             conn.commit()
         except Exception as e:
             print(f"Error updating conversation analytics: {str(e)}")  # Use print instead of st.error
+        finally:
+            cur.close()
+            conn.close()
+
+    @staticmethod
+    def update_user_analytics(user_id):
+        """Update analytics for a user"""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        try:
+            # Calculate user-level analytics
+            cur.execute("""
+                WITH user_metrics AS (
+                    SELECT 
+                        COUNT(DISTINCT c.id) as total_conversations,
+                        COUNT(DISTINCT CASE WHEN c.completion_status = 'completed' THEN c.id END)::float / 
+                            NULLIF(COUNT(DISTINCT c.id), 0) as completion_rate,
+                        COUNT(m.id) as total_messages,
+                        AVG(m.response_time) as avg_response_time,
+                        AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
+                        MAX(c.start_time) as last_active,
+                        AVG(m.word_count) as avg_word_count
+                    FROM conversations c
+                    LEFT JOIN messages m ON c.id = m.conversation_id
+                    WHERE c.user_id = %s
+                )
+                INSERT INTO analytics_summary (
+                    user_id, total_conversations, total_messages,
+                    average_response_time, average_session_length,
+                    last_active, completion_rate, average_word_count,
+                    updated_at
+                )
+                SELECT 
+                    %s, total_conversations, total_messages,
+                    avg_response_time, avg_session_length,
+                    last_active, completion_rate, avg_word_count,
+                    CURRENT_TIMESTAMP
+                FROM user_metrics
+                ON CONFLICT (user_id) DO UPDATE
+                SET 
+                    total_conversations = EXCLUDED.total_conversations,
+                    total_messages = EXCLUDED.total_messages,
+                    average_response_time = EXCLUDED.average_response_time,
+                    average_session_length = EXCLUDED.average_session_length,
+                    last_active = EXCLUDED.last_active,
+                    completion_rate = EXCLUDED.completion_rate,
+                    average_word_count = EXCLUDED.average_word_count,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (user_id, user_id))
+            conn.commit()
+        except Exception as e:
+            print(f"Error updating user analytics: {str(e)}")  # Use print instead of st.error
         finally:
             cur.close()
             conn.close()
