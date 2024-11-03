@@ -83,7 +83,72 @@ class AnalyticsOperations:
             
             conn.commit()
         except Exception as e:
-            st.error(f"Error updating message analytics: {str(e)}")
+            print(f"Error updating message analytics: {str(e)}")  # Use print instead of st.error
         finally:
             cur.close()
             conn.close()
+
+    @staticmethod
+    def update_conversation_analytics(conversation_id):
+        """Update analytics for a conversation"""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        try:
+            cur.execute('''
+                UPDATE conversations c
+                SET 
+                    response_count = (
+                        SELECT COUNT(*) 
+                        FROM messages 
+                        WHERE conversation_id = c.id 
+                        AND role = 'user'
+                    ),
+                    average_response_time = (
+                        SELECT AVG(response_time) 
+                        FROM messages 
+                        WHERE conversation_id = c.id 
+                        AND response_time IS NOT NULL
+                    )
+                WHERE id = %s
+            ''', (conversation_id,))
+            conn.commit()
+        except Exception as e:
+            print(f"Error updating conversation analytics: {str(e)}")  # Use print instead of st.error
+        finally:
+            cur.close()
+            conn.close()
+
+    @staticmethod
+    def get_user_analytics(days=30):
+        """Get analytics data for all users within specified days"""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        start_date = datetime.now() - timedelta(days=days)
+        
+        cur.execute("""
+            WITH daily_stats AS (
+                SELECT 
+                    DATE(c.start_time) as date,
+                    COUNT(DISTINCT c.id) as conversations,
+                    COUNT(DISTINCT c.user_id) as active_users,
+                    AVG(m.response_time) as avg_response_time,
+                    AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
+                    AVG(m.word_count) as avg_word_count,
+                    MODE() WITHIN GROUP (ORDER BY a.interaction_grade) as most_common_grade
+                FROM conversations c
+                LEFT JOIN messages m ON c.id = m.conversation_id
+                LEFT JOIN analytics_summary a ON c.user_id = a.user_id
+                WHERE c.start_time >= %s
+                GROUP BY DATE(c.start_time)
+            )
+            SELECT * FROM daily_stats
+            ORDER BY date DESC
+        """, (start_date,))
+        
+        results = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        return results

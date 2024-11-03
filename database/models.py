@@ -53,10 +53,21 @@ def init_db():
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             response_time INTEGER,
-            word_count INTEGER,
+            word_count INTEGER DEFAULT 0,
             sentence_count INTEGER
         )
     """)
+    
+    # Add word_count column if it doesn't exist
+    cur.execute('''
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name='messages' AND column_name='word_count') THEN
+                ALTER TABLE messages ADD COLUMN word_count INTEGER DEFAULT 0;
+            END IF;
+        END $$;
+    ''')
     
     # Create analytics_summary table with interaction grade
     cur.execute("""
