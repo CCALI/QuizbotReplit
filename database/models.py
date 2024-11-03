@@ -1,4 +1,3 @@
-from datetime import datetime
 import psycopg2
 import os
 
@@ -52,21 +51,11 @@ def init_db():
             role VARCHAR(20) NOT NULL,
             content TEXT NOT NULL,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            response_time INTEGER,
-            sentence_count INTEGER
+            sentence_count INTEGER,
+            response_time FLOAT DEFAULT NULL,
+            word_count INTEGER DEFAULT 0
         )
     """)
-    
-    # Check if word_count column exists before adding it
-    cur.execute('''
-        DO $$ 
-        BEGIN 
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                          WHERE table_name='messages' AND column_name='word_count') THEN
-                ALTER TABLE messages ADD COLUMN word_count INTEGER DEFAULT 0;
-            END IF;
-        END $$;
-    ''')
     
     # Create analytics_summary table with interaction grade
     cur.execute("""

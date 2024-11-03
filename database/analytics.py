@@ -11,9 +11,7 @@ class AnalyticsOperations:
         """Count the number of sentences in a text"""
         if not text:
             return 0
-        # Simple sentence counting based on period, exclamation, and question marks
         sentences = re.split(r'[.!?]+', text)
-        # Filter out empty strings
         return len([s for s in sentences if s.strip()])
 
     @staticmethod
@@ -22,9 +20,8 @@ class AnalyticsOperations:
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            message_content = None  # Initialize the variable
+            message_content = None
             
-            # Get message content and handle potential None result
             cur.execute("SELECT content FROM messages WHERE id = %s", (message_id,))
             result = cur.fetchone()
             if result:
@@ -33,11 +30,9 @@ class AnalyticsOperations:
             if not message_content:
                 return
                 
-            # Calculate message metrics
             sentence_count = AnalyticsOperations.count_sentences(message_content)
             word_count = len(message_content.split())
             
-            # Update message metrics
             cur.execute("""
                 WITH message_metrics AS (
                     SELECT 
@@ -45,10 +40,10 @@ class AnalyticsOperations:
                         m.conversation_id,
                         c.user_id,
                         %s as word_count,
-                        EXTRACT(EPOCH FROM (m.timestamp - LAG(m.timestamp) OVER (
+                        NULLIF(EXTRACT(EPOCH FROM (m.timestamp - LAG(m.timestamp) OVER (
                             PARTITION BY m.conversation_id 
                             ORDER BY m.timestamp
-                        ))) as response_time
+                        ))), 0) as response_time
                     FROM messages m
                     JOIN conversations c ON m.conversation_id = c.id
                     WHERE m.id = %s
@@ -66,12 +61,10 @@ class AnalyticsOperations:
                 RETURNING mm.conversation_id
             """, (word_count, message_id, sentence_count))
             
-            # Get the conversation_id
             result = cur.fetchone()
             if result:
                 conversation_id = result[0]
                 
-                # Update conversation sentence count
                 cur.execute("""
                     UPDATE conversations
                     SET sentence_count = (
@@ -85,7 +78,7 @@ class AnalyticsOperations:
             
             conn.commit()
         except Exception as e:
-            print(f"Error updating message analytics: {str(e)}")  # Use print instead of st.error
+            print(f"Error updating message analytics: {str(e)}")
         finally:
             if cur:
                 cur.close()
@@ -109,7 +102,7 @@ class AnalyticsOperations:
                         AND role = 'user'
                     ),
                     average_response_time = (
-                        SELECT AVG(response_time) 
+                        SELECT COALESCE(AVG(NULLIF(response_time, 0)), 0)
                         FROM messages 
                         WHERE conversation_id = c.id 
                         AND response_time IS NOT NULL
@@ -118,7 +111,7 @@ class AnalyticsOperations:
             ''', (conversation_id,))
             conn.commit()
         except Exception as e:
-            print(f"Error updating conversation analytics: {str(e)}")  # Use print instead of st.error
+            print(f"Error updating conversation analytics: {str(e)}")
         finally:
             cur.close()
             conn.close()
@@ -130,7 +123,6 @@ class AnalyticsOperations:
         cur = conn.cursor()
         
         try:
-            # Calculate user-level analytics
             cur.execute("""
                 WITH user_metrics AS (
                     SELECT 
@@ -138,7 +130,7 @@ class AnalyticsOperations:
                         COUNT(DISTINCT CASE WHEN c.completion_status = 'completed' THEN c.id END)::float / 
                             NULLIF(COUNT(DISTINCT c.id), 0) as completion_rate,
                         COUNT(m.id) as total_messages,
-                        AVG(m.response_time) as avg_response_time,
+                        COALESCE(AVG(NULLIF(m.response_time, 0)), 0) as avg_response_time,
                         AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
                         MAX(c.start_time) as last_active,
                         AVG(m.word_count) as avg_word_count
@@ -171,7 +163,7 @@ class AnalyticsOperations:
             """, (user_id, user_id))
             conn.commit()
         except Exception as e:
-            print(f"Error updating user analytics: {str(e)}")  # Use print instead of st.error
+            print(f"Error updating user analytics: {str(e)}")
         finally:
             cur.close()
             conn.close()
@@ -184,13 +176,13 @@ class AnalyticsOperations:
         
         start_date = datetime.now() - timedelta(days=days)
         
-        cur.execute("""
+        cur.execute('''
             WITH daily_stats AS (
                 SELECT 
                     DATE(c.start_time) as date,
                     COUNT(DISTINCT c.id) as conversations,
                     COUNT(DISTINCT c.user_id) as active_users,
-                    AVG(m.response_time) as avg_response_time,
+                    COALESCE(AVG(NULLIF(m.response_time, 0)), 0) as avg_response_time,
                     AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
                     AVG(m.word_count) as avg_word_count,
                     MODE() WITHIN GROUP (ORDER BY a.interaction_grade) as most_common_grade
@@ -202,7 +194,7 @@ class AnalyticsOperations:
             )
             SELECT * FROM daily_stats
             ORDER BY date DESC
-        """, (start_date,))
+        ''', (start_date,))
         
         results = cur.fetchall()
         cur.close()
