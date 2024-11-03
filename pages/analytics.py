@@ -42,26 +42,26 @@ def run_analytics_dashboard():
     with col1:
         st.metric(
             "Total Conversations",
-            df['conversations'].sum(),
-            f"{df['conversations'].mean():.1f} avg/day"
+            int(df['conversations'].sum()),
+            f"{float(df['conversations'].mean()):.1f} avg/day"
         )
     with col2:
         st.metric(
             "Active Users",
-            df['active_users'].sum(),
-            f"{df['active_users'].mean():.1f} avg/day"
+            int(df['active_users'].sum()),
+            f"{float(df['active_users'].mean()):.1f} avg/day"
         )
     with col3:
         st.metric(
-            "Avg. Session Length",
-            f"{df['avg_session_length'].mean():.1f} min",
-            f"{df['avg_session_length'].std():.1f} min std"
+            "Avg Session Length",
+            f"{float(df['avg_session_length'].mean()):.1f} min",
+            f"{float(df['avg_session_length'].std()):.1f} min std"
         )
     with col4:
         st.metric(
-            "Avg. Word Count",
-            f"{df['avg_word_count'].mean():.1f}",
-            f"{df['avg_word_count'].std():.1f} std"
+            "Avg Word Count",
+            f"{float(df['avg_word_count'].mean()):.1f}",
+            f"{float(df['avg_word_count'].std()):.1f} std"
         )
     
     # Engagement Trends

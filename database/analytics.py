@@ -102,7 +102,7 @@ class AnalyticsOperations:
                         AND role = 'user'
                     ),
                     average_response_time = (
-                        SELECT COALESCE(AVG(NULLIF(response_time, 0)), 0)
+                        SELECT COALESCE(AVG(NULLIF(response_time, 0))::float, 0.0)
                         FROM messages 
                         WHERE conversation_id = c.id 
                         AND response_time IS NOT NULL
@@ -126,14 +126,14 @@ class AnalyticsOperations:
             cur.execute("""
                 WITH user_metrics AS (
                     SELECT 
-                        COUNT(DISTINCT c.id) as total_conversations,
+                        COUNT(DISTINCT c.id)::float as total_conversations,
                         COUNT(DISTINCT CASE WHEN c.completion_status = 'completed' THEN c.id END)::float / 
-                            NULLIF(COUNT(DISTINCT c.id), 0) as completion_rate,
-                        COUNT(m.id) as total_messages,
-                        COALESCE(AVG(NULLIF(m.response_time, 0)), 0) as avg_response_time,
-                        AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
+                            NULLIF(COUNT(DISTINCT c.id)::float, 0) as completion_rate,
+                        COUNT(m.id)::float as total_messages,
+                        COALESCE(AVG(NULLIF(m.response_time, 0))::float, 0.0) as avg_response_time,
+                        COALESCE(AVG(NULLIF(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60, 0))::float, 0.0) as avg_session_length,
                         MAX(c.start_time) as last_active,
-                        AVG(m.word_count) as avg_word_count
+                        COALESCE(AVG(NULLIF(m.word_count, 0))::float, 0.0) as avg_word_count
                     FROM conversations c
                     LEFT JOIN messages m ON c.id = m.conversation_id
                     WHERE c.user_id = %s
@@ -180,12 +180,12 @@ class AnalyticsOperations:
             WITH daily_stats AS (
                 SELECT 
                     DATE(c.start_time) as date,
-                    COUNT(DISTINCT c.id) as conversations,
-                    COUNT(DISTINCT c.user_id) as active_users,
-                    COALESCE(AVG(NULLIF(m.response_time, 0)), 0) as avg_response_time,
-                    AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
-                    AVG(m.word_count) as avg_word_count,
-                    1 as most_common_grade  -- Default grade while we fix the grading system
+                    COUNT(DISTINCT c.id)::float as conversations,
+                    COUNT(DISTINCT c.user_id)::float as active_users,
+                    COALESCE(AVG(NULLIF(m.response_time::float, 0))::float, 0.0) as avg_response_time,
+                    COALESCE(AVG(NULLIF(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60, 0))::float, 0.0) as avg_session_length,
+                    COALESCE(AVG(NULLIF(m.word_count::float, 0))::float, 0.0) as avg_word_count,
+                    1::float as most_common_grade
                 FROM conversations c
                 LEFT JOIN messages m ON c.id = m.conversation_id
                 WHERE c.start_time >= %s
