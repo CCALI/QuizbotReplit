@@ -19,7 +19,7 @@ class PDFService:
         self.math_pattern = re.compile(r'\$.*?\$|\\\[.*?\\\]|\\\(.*?\\\)')
         self.footnote_pattern = re.compile(r'\[\d+\]|\(\d+\)')
         self.cache = {}
-        self.chunk_size = 1500  # Optimized chunk size
+        self.chunk_size = 1000  # Reduced chunk size as requested
 
     def _calculate_file_hash(self, file_path: str) -> str:
         """Calculate MD5 hash of a file"""
@@ -127,7 +127,7 @@ class PDFService:
         """Extract text from PDFs with progress tracking and caching"""
         try:
             progress_bar = st.progress(0)
-            st.write("Processing PDF documents...")
+            status_text = st.empty()
             
             if not os.path.exists(folder_path):
                 st.error(f"Readings folder not found: {folder_path}")
@@ -144,19 +144,26 @@ class PDFService:
             all_footnotes = {}
             
             for i, filename in enumerate(pdf_files):
+                status_text.write(f"Processing {filename}...")
                 file_path = os.path.join(folder_path, filename)
                 progress = (i + 1) / len(pdf_files)
                 progress_bar.progress(progress)
                 
                 try:
+                    if os.path.getsize(file_path) == 0:
+                        st.warning(f"Skipping empty file: {filename}")
+                        continue
+                        
                     file_hash = self._calculate_file_hash(file_path)
                     cache_key = f"{file_hash}_{os.path.getsize(file_path)}"
                     
                     if cache_key in self.cache:
-                        cached_data = self.cache[cache_key]
-                        text, tables, images, footnotes = cached_data
+                        text, tables, images, footnotes = self.cache[cache_key]
+                        status_text.write(f"Retrieved {filename} from cache")
                     else:
                         text, tables, images, footnotes = self._extract_single_pdf(file_path)
+                        if not text.strip():
+                            st.warning(f"No text content found in {filename}")
                         self.cache[cache_key] = (text, tables, images, footnotes)
                     
                     all_text.append(f"\n=== Document: {filename} ===\n")
@@ -172,6 +179,7 @@ class PDFService:
                     continue
             
             progress_bar.empty()
+            status_text.empty()
             
             if not all_text:
                 st.error("No text could be extracted from any PDF files")
