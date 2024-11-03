@@ -8,7 +8,9 @@ import tenacity
 
 class OpenAIService:
     def __init__(self):
-        self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        # Use user's custom API key if available, otherwise use default
+        api_key = getattr(st.session_state, 'custom_openai_key', None) or os.environ.get("OPENAI_API_KEY")
+        self.client = OpenAI(api_key=api_key)
         self.max_retries = 5
         self.timeout = 20  # Reduced timeout
         self.cache_ttl = 3600  # Cache TTL in seconds
@@ -35,6 +37,19 @@ class OpenAIService:
                 st.warning("Request timed out. Retrying...")
             raise e
 
+    def verify_api_key(self, api_key: str) -> bool:
+        """Verify if an API key is valid by making a test request"""
+        try:
+            test_client = OpenAI(api_key=api_key)
+            test_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": "test"}],
+                max_tokens=5
+            )
+            return True
+        except Exception:
+            return False
+
     def generate_title_summary(self, text: str) -> str:
         try:
             response = self._make_api_call_with_retry(
@@ -54,7 +69,7 @@ class OpenAIService:
             print(f"Error generating title: {str(e)}")
             return None
 
-    @lru_cache(maxsize=200)  # Increased cache size
+    @lru_cache(maxsize=200)
     def generate_summary(self, text: str) -> str:
         """Generate summary with token limit and caching"""
         try:
@@ -161,7 +176,6 @@ When redirecting, use professional, positive language such as:
 Remember: Your goal is to help students develop critical thinking skills through focused, professional dialogue.'''
         
         try:
-            # Limit conversation history tokens
             current_tokens = sum(self.count_tokens(msg["content"]) for msg in conversation_history)
             
             if current_tokens > self.max_history_tokens:

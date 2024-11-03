@@ -14,7 +14,7 @@ def init_db():
     conn = get_db_connection()
     cur = conn.cursor()
     
-    # Create users table with full name fields and role
+    # Create users table with full name fields, role and API key
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -23,7 +23,8 @@ def init_db():
             first_name VARCHAR(100),
             last_name VARCHAR(100),
             role VARCHAR(20) DEFAULT 'student',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            openai_api_key VARCHAR(200)
         )
     """)
     
@@ -128,6 +129,11 @@ def init_db():
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                           WHERE table_name = 'analytics_summary' AND column_name = 'interaction_grade') THEN
                 ALTER TABLE analytics_summary ADD COLUMN interaction_grade INTEGER DEFAULT 1;
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                          WHERE table_name = 'users' AND column_name = 'openai_api_key') THEN
+                ALTER TABLE users ADD COLUMN openai_api_key VARCHAR(200);
             END IF;
         END $$;
     """)
