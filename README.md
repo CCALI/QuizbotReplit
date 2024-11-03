@@ -24,24 +24,58 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 - PostgreSQL database
 - OpenAI API key (or Ollama for local LLM support)
 
-### Local Setup
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Set up PostgreSQL database
-4. Configure environment variables:
+### Environment Setup
+
+1. Create a `.env` file in the root directory using `.env.example` as a template:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Configure your environment variables in the `.env` file:
+
+   #### Required Variables:
    ```env
-   OPENAI_API_KEY=your_api_key
-   PGDATABASE=your_db_name
-   PGUSER=your_db_user
-   PGPASSWORD=your_db_password
+   # OpenAI Configuration (if not using Ollama)
+   OPENAI_API_KEY=your_openai_api_key
+
+   # PostgreSQL Database Configuration
+   PGDATABASE=your_database_name
+   PGUSER=your_database_user
+   PGPASSWORD=your_database_password
    PGHOST=localhost
    PGPORT=5432
    ```
+
+   #### Optional Ollama Configuration:
+   ```env
+   # Set these only if using Ollama instead of OpenAI
+   USE_OLLAMA=true
+   OLLAMA_HOST=http://localhost:11434
+   OLLAMA_MODEL=gemma:2b
+   ```
+
+### Local Setup
+1. Clone the repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Set up PostgreSQL database:
+   ```sql
+   CREATE DATABASE quizbot;
+   CREATE USER quizbot_user WITH PASSWORD 'your_password';
+   GRANT ALL PRIVILEGES ON DATABASE quizbot TO quizbot_user;
+   ```
+4. Configure environment variables as described above
 5. Run the application: `streamlit run main.py`
 
 ### Replit Setup
 1. Fork the repository on Replit
-2. Add the required secrets in Replit's Secrets tab
+2. Add the required secrets in Replit's Secrets tab:
+   - `OPENAI_API_KEY` (if using OpenAI)
+   - `PGDATABASE`
+   - `PGUSER`
+   - `PGPASSWORD`
+   - `PGHOST`
+   - `PGPORT`
+   - `USE_OLLAMA` (optional, for Ollama integration)
 3. Click Run
 
 ## Usage
@@ -102,6 +136,33 @@ The application will automatically use the local Ollama model for:
 - Managing dialogue flow
 
 Note: When using Ollama, response times may vary depending on your hardware. GPU support is recommended for optimal performance.
+
+## Troubleshooting
+
+### Common Issues:
+
+1. Database Connection:
+   - Verify PostgreSQL is running
+   - Check database credentials in .env
+   - Ensure database exists and user has proper permissions
+
+2. OpenAI API:
+   - Verify API key is valid
+   - Check for API rate limits
+   - Ensure internet connectivity
+
+3. Ollama Integration:
+   - Verify Ollama service is running
+   - Check if model is downloaded
+   - Confirm USE_OLLAMA setting
+
+### Error Messages:
+
+- "Database connection failed": Check PostgreSQL configuration
+- "OpenAI API error": Verify API key and rate limits
+- "Ollama service not found": Ensure Ollama is running
+
+For additional support, please open an issue on GitHub.
 
 ## License
 
