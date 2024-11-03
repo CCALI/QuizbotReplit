@@ -19,8 +19,8 @@ class PDFService:
         self.math_pattern = re.compile(r'\$.*?\$|\\\[.*?\\\]|\\\(.*?\\\)')
         self.footnote_pattern = re.compile(r'\[\d+\]|\(\d+\)')
         self.cache = {}
-        self.chunk_size = 1000  # Reduced chunk size as requested
-
+        self.chunk_size = 500  # Reduced chunk size as requested
+        
     def _calculate_file_hash(self, file_path: str) -> str:
         """Calculate MD5 hash of a file"""
         hash_md5 = hashlib.md5()
@@ -32,6 +32,8 @@ class PDFService:
     @lru_cache(maxsize=20)
     def clean_text(self, text: str) -> str:
         """Clean and preprocess extracted text with caching"""
+        if not text:
+            return ""
         text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'\s+', ' ', text)
@@ -126,7 +128,8 @@ class PDFService:
     def extract_text_with_formatting(self, folder_path: str) -> tuple:
         """Extract text from PDFs with progress tracking and caching"""
         try:
-            progress_bar = st.progress(0)
+            progress_placeholder = st.empty()
+            progress_bar = progress_placeholder.progress(0)
             status_text = st.empty()
             
             if not os.path.exists(folder_path):
@@ -164,7 +167,8 @@ class PDFService:
                         text, tables, images, footnotes = self._extract_single_pdf(file_path)
                         if not text.strip():
                             st.warning(f"No text content found in {filename}")
-                        self.cache[cache_key] = (text, tables, images, footnotes)
+                        else:
+                            self.cache[cache_key] = (text, tables, images, footnotes)
                     
                     all_text.append(f"\n=== Document: {filename} ===\n")
                     all_text.append(text)
@@ -178,7 +182,7 @@ class PDFService:
                     st.error(f"Error processing {filename}: {str(e)}")
                     continue
             
-            progress_bar.empty()
+            progress_placeholder.empty()
             status_text.empty()
             
             if not all_text:
@@ -255,6 +259,9 @@ class PDFService:
 
     def chunk_text(self, text: str, chunk_size: int = None) -> list:
         """Split text into optimized chunks"""
+        if not text:
+            return []
+            
         if chunk_size is None:
             chunk_size = self.chunk_size
             

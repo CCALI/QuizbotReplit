@@ -8,6 +8,8 @@ class AnalyticsOperations:
     @staticmethod
     def count_sentences(text):
         """Count the number of sentences in a text"""
+        if not text:
+            return 0
         # Simple sentence counting based on period, exclamation, and question marks
         sentences = re.split(r'[.!?]+', text)
         # Filter out empty strings
@@ -20,13 +22,16 @@ class AnalyticsOperations:
         cur = conn.cursor()
         
         try:
-            # Get message content first
+            # Get message content and handle potential None result
             cur.execute("SELECT content FROM messages WHERE id = %s", (message_id,))
             result = cur.fetchone()
             if not result:
                 return
                 
             message_content = result[0]
+            if not message_content:
+                return
+                
             sentence_count = AnalyticsOperations.count_sentences(message_content)
             
             # Calculate message metrics including sentence count
@@ -67,7 +72,7 @@ class AnalyticsOperations:
                 cur.execute("""
                     UPDATE conversations
                     SET sentence_count = (
-                        SELECT SUM(sentence_count)
+                        SELECT COALESCE(SUM(sentence_count), 0)
                         FROM messages
                         WHERE conversation_id = %s
                         AND role = 'user'
@@ -76,6 +81,8 @@ class AnalyticsOperations:
                 """, (conversation_id, conversation_id))
             
             conn.commit()
+        except Exception as e:
+            st.error(f"Error updating message analytics: {str(e)}")
         finally:
             cur.close()
             conn.close()
