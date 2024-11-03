@@ -185,10 +185,9 @@ class AnalyticsOperations:
                     COALESCE(AVG(NULLIF(m.response_time, 0)), 0) as avg_response_time,
                     AVG(EXTRACT(EPOCH FROM (c.end_time - c.start_time))/60) as avg_session_length,
                     AVG(m.word_count) as avg_word_count,
-                    MODE() WITHIN GROUP (ORDER BY a.interaction_grade) as most_common_grade
+                    1 as most_common_grade  -- Default grade while we fix the grading system
                 FROM conversations c
                 LEFT JOIN messages m ON c.id = m.conversation_id
-                LEFT JOIN analytics_summary a ON c.user_id = a.user_id
                 WHERE c.start_time >= %s
                 GROUP BY DATE(c.start_time)
             )
