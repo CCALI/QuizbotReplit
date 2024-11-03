@@ -15,13 +15,14 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 - Instructor dashboard for content management
 - Multi-user support with role-based access
 - Conversation history and transcript generation
+- Optional Ollama integration for local LLM support
 
 ## Installation
 
 ### Requirements
 - Python 3.8+
 - PostgreSQL database
-- OpenAI API key
+- OpenAI API key (or Ollama for local LLM support)
 
 ### Local Setup
 1. Clone the repository
@@ -49,6 +50,58 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 3. View analytics and download conversation transcripts
 
 Note: The application will process any PDF files placed in the Readings folder automatically.
+
+## Ollama Integration (Alternative to OpenAI)
+
+QuizBot can be configured to use Ollama as an alternative to OpenAI for local LLM support. This is useful for:
+- Running without internet connectivity
+- Privacy-sensitive environments
+- Cost-free operation
+- Testing and development
+
+### Setting up Ollama
+
+1. Install Ollama:
+   ```bash
+   # Linux
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # For MacOS and Windows, download from https://ollama.com
+   ```
+
+2. Pull the required model:
+   ```bash
+   ollama pull gemma:2b
+   ```
+
+3. Install Python dependencies:
+   ```bash
+   pip install ollama langchain
+   ```
+
+4. Configure QuizBot for Ollama:
+   - Set `USE_OLLAMA=true` in your environment variables
+   - No OpenAI API key required when using Ollama
+
+### Using Ollama with QuizBot
+
+1. Start the Ollama service:
+   ```bash
+   ollama serve
+   ```
+
+2. Run QuizBot normally:
+   ```bash
+   streamlit run main.py
+   ```
+
+The application will automatically use the local Ollama model for:
+- Generating questions
+- Processing responses
+- Creating summaries
+- Managing dialogue flow
+
+Note: When using Ollama, response times may vary depending on your hardware. GPU support is recommended for optimal performance.
 
 ## License
 
