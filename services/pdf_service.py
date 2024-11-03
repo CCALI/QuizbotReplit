@@ -13,9 +13,9 @@ class PDFService:
     def __init__(self):
         self.readings_folder = 'Readings'
         self.supported_formats = ['.pdf']
-        self.chunk_size = 500
-        self.extraction_threads = 4
-        self.file_cache: Dict[str, str] = {}
+        self.chunk_size = 300  # Reduced from 500
+        self.extraction_threads = 2  # Reduced from 4
+        self.file_cache = {}
         self._cache_lock = threading.Lock()
         
     def _calculate_file_hash(self, file_path: str) -> str:
@@ -34,84 +34,64 @@ class PDFService:
         text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'(?<=\n)\s*[•∙◦○●]\s*', '• ', text)
-        text = re.sub(r'(?<=\n)\s*(\d+\.|\w+\.)\s+', r'\1 ', text)
-        text = text.replace('|', 'I').replace('0', 'O')
-        return text.strip()
+        text = text.strip()
+        return text
 
     def _process_page(self, page) -> str:
-        """Process a single page with optimized memory usage"""
         try:
-            words = page.extract_words(
-                keep_blank_chars=True,
-                use_text_flow=True,
+            # Simplified text extraction
+            text = page.extract_text(
+                layout=True,
                 x_tolerance=3,
                 y_tolerance=3
             )
-            
-            if not words:
-                return ""
-                
-            current_line = []
-            last_y = None
-            lines = []
-            
-            for word in words:
-                if last_y is not None and abs(word['top'] - last_y) > 3:
-                    if current_line:
-                        lines.append(self.clean_text(''.join(current_line)))
-                    current_line = []
-                    
-                current_line.append(word['text'])
-                last_y = word['top']
-            
-            if current_line:
-                lines.append(self.clean_text(''.join(current_line)))
-            
-            return '\n'.join(lines)
+            return text.strip() if text else ""
         except Exception as e:
-            st.error(f"Error processing page: {str(e)}")
+            print(f"Error processing page: {str(e)}")
             return ""
 
     def _process_pdf_parallel(self, pdf_path: str) -> Tuple[str, List, List, Dict]:
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 total_pages = len(pdf.pages)
+                
+                # Process pages in smaller batches
+                text_chunks = []
+                batch_size = 5
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
-                # Process pages in parallel
-                with concurrent.futures.ThreadPoolExecutor(max_workers=self.extraction_threads) as executor:
-                    future_to_page = {
-                        executor.submit(self._process_page, pdf.pages[i]): i 
-                        for i in range(total_pages)
-                    }
+                for batch_start in range(0, total_pages, batch_size):
+                    batch_end = min(batch_start + batch_size, total_pages)
+                    batch_pages = list(range(batch_start, batch_end))
                     
-                    text_chunks = [""] * total_pages
-                    completed = 0
-                    
-                    for future in concurrent.futures.as_completed(future_to_page):
-                        page_num = future_to_page[future]
-                        try:
-                            text_chunks[page_num] = future.result()
-                        except Exception as e:
-                            st.error(f"Error processing page {page_num + 1}: {str(e)}")
-                            text_chunks[page_num] = ""
-                            
-                        completed += 1
-                        progress = completed / total_pages
-                        progress_bar.progress(progress)
-                        status_text.write(f"Processing page {completed}/{total_pages}")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=self.extraction_threads) as executor:
+                        futures = {
+                            executor.submit(self._process_page, pdf.pages[i]): i 
+                            for i in batch_pages
+                        }
                         
-                        # Force garbage collection periodically
-                        if completed % 10 == 0:
-                            gc.collect()
+                        for future in concurrent.futures.as_completed(futures):
+                            page_num = futures[future]
+                            try:
+                                text = future.result()
+                                if text:
+                                    text_chunks.append(text)
+                            except Exception as e:
+                                st.error(f"Error processing page {page_num + 1}: {str(e)}")
                     
+                    # Update progress
+                    progress = min((batch_end) / total_pages, 1.0)
+                    progress_bar.progress(progress)
+                    status_text.write(f"Processing pages {batch_start + 1}-{batch_end}/{total_pages}")
+                    
+                    # Force garbage collection after each batch
+                    gc.collect()
+                
                 progress_bar.empty()
                 status_text.empty()
                 
-                combined_text = '\n'.join(text_chunks)
-                return combined_text, [], [], {}  # Return empty lists for tables/images/footnotes
+                return '\n\n'.join(text_chunks), [], [], {}
                 
         except Exception as e:
             st.error(f"Error processing PDF: {str(e)}")
@@ -179,51 +159,24 @@ class PDFService:
             return "", [], [], {}
 
     def chunk_text(self, text: str, chunk_size: int = None) -> List[str]:
-        """Split text into optimized chunks with improved efficiency"""
         if not text:
             return []
             
-        if chunk_size is None:
-            chunk_size = self.chunk_size
-            
-        paragraphs = text.split('\n\n')
+        chunk_size = chunk_size or self.chunk_size
         chunks = []
         current_chunk = []
-        current_length = 0
+        current_size = 0
         
-        for paragraph in paragraphs:
-            # Simple length check for splitting
-            if current_length + len(paragraph) > chunk_size:
+        # Simple paragraph-based chunking
+        for paragraph in text.split('\n\n'):
+            if current_size + len(paragraph) > chunk_size:
                 if current_chunk:
                     chunks.append('\n\n'.join(current_chunk))
                     current_chunk = []
-                    current_length = 0
-                
-                # Handle long paragraphs
-                if len(paragraph) > chunk_size:
-                    words = paragraph.split()
-                    temp_chunk = []
-                    temp_length = 0
-                    
-                    for word in words:
-                        if temp_length + len(word) > chunk_size:
-                            if temp_chunk:
-                                chunks.append(' '.join(temp_chunk))
-                            temp_chunk = [word]
-                            temp_length = len(word)
-                        else:
-                            temp_chunk.append(word)
-                            temp_length += len(word) + 1
-                    
-                    if temp_chunk:
-                        chunks.append(' '.join(temp_chunk))
-                else:
-                    current_chunk = [paragraph]
-                    current_length = len(paragraph)
-            else:
-                current_chunk.append(paragraph)
-                current_length += len(paragraph) + 2
-        
+                    current_size = 0
+            current_chunk.append(paragraph)
+            current_size += len(paragraph)
+            
         if current_chunk:
             chunks.append('\n\n'.join(current_chunk))
         
