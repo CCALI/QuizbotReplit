@@ -4,6 +4,7 @@ import pandas as pd
 from database.analytics import AnalyticsOperations
 
 def calculate_engagement_score(interactions, words):
+    """Calculate engagement score based on chat interactions and word count"""
     if interactions >= 5 and words >= 500:
         return 3
     elif interactions <= 2 or words <= 50:
@@ -72,7 +73,7 @@ def run_analytics_dashboard():
     # Calculate average engagement score
     avg_score = df['engagement_score'].mean()
     
-    # Display average score prominently
+    # Display average score
     st.metric(
         "Average Engagement Score",
         f"{avg_score:.1f}",
