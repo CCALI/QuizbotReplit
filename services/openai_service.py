@@ -4,48 +4,41 @@ import time
 import streamlit as st
 from functools import lru_cache
 import tiktoken
+import tenacity
 
 class OpenAIService:
     def __init__(self):
         self.client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        self.max_retries = 3
-        self.timeout = 30
+        self.max_retries = 5
+        self.timeout = 20  # Reduced timeout
         self.cache_ttl = 3600  # Cache TTL in seconds
         self.encoder = tiktoken.encoding_for_model("gpt-4")
+        self.max_history_tokens = 2000  # Reduced from 3000
         
     def count_tokens(self, text: str) -> int:
         """Count the number of tokens in a text string"""
         return len(self.encoder.encode(text))
 
+    @tenacity.retry(
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=30),
+        stop=tenacity.stop_after_attempt(5),
+        retry=tenacity.retry_if_exception_type(Exception)
+    )
     def _make_api_call_with_retry(self, func, *args, **kwargs):
-        """Helper method to handle API calls with retry logic and detailed error messages"""
-        last_error = None
-        for attempt in range(self.max_retries):
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                last_error = e
-                if "rate_limit" in str(e).lower():
-                    wait_time = 2 ** attempt
-                    st.warning(f"Rate limit reached. Waiting {wait_time} seconds...")
-                    time.sleep(wait_time)
-                elif "timeout" in str(e).lower():
-                    st.warning("Request timed out. Retrying...")
-                    time.sleep(2)
-                else:
-                    if attempt == self.max_retries - 1:
-                        st.error(f"Failed after {self.max_retries} attempts: {str(e)}")
-                        raise e
-                    time.sleep(2)
-        
-        if last_error:
-            raise last_error
+        """Helper method to handle API calls with retry logic and exponential backoff"""
+        try:
+            return func(*args, **kwargs, timeout=self.timeout)
+        except Exception as e:
+            if "rate_limit" in str(e).lower():
+                st.warning("Rate limit reached. Retrying with exponential backoff...")
+            elif "timeout" in str(e).lower():
+                st.warning("Request timed out. Retrying...")
+            raise e
 
-    @lru_cache(maxsize=100)
+    @lru_cache(maxsize=200)  # Increased cache size
     def generate_summary(self, text: str) -> str:
         """Generate summary with token limit and caching"""
         try:
-            # Limit input tokens
             max_input_tokens = 4000
             current_tokens = self.count_tokens(text)
             
@@ -73,40 +66,36 @@ class OpenAIService:
                         self.client.chat.completions.create,
                         model="gpt-4",
                         messages=[
-                            {"role": "system", "content": "Generate a concise summary (max 200 words) of this text section:"},
+                            {"role": "system", "content": "Generate a concise summary (max 150 words) of this text section:"},
                             {"role": "user", "content": chunk}
                         ],
-                        response_format={"type": "text"},
-                        timeout=self.timeout
+                        response_format={"type": "text"}
                     )
                     summaries.append(response.choices[0].message.content)
                 
-                # Combine summaries
                 combined_summary = " ".join(summaries)
                 if self.count_tokens(combined_summary) > max_input_tokens:
                     final_response = self._make_api_call_with_retry(
                         self.client.chat.completions.create,
                         model="gpt-4",
                         messages=[
-                            {"role": "system", "content": "Create a final concise summary (max 200 words) from these section summaries:"},
+                            {"role": "system", "content": "Create a final concise summary (max 150 words) from these section summaries:"},
                             {"role": "user", "content": combined_summary}
                         ],
-                        response_format={"type": "text"},
-                        timeout=self.timeout
+                        response_format={"type": "text"}
                     )
                     return final_response.choices[0].message.content
                 return combined_summary
-                
+            
             else:
                 response = self._make_api_call_with_retry(
                     self.client.chat.completions.create,
                     model="gpt-4",
                     messages=[
-                        {"role": "system", "content": "Generate a concise summary (max 200 words) of the following text:"},
+                        {"role": "system", "content": "Generate a concise summary (max 150 words) of the following text:"},
                         {"role": "user", "content": text}
                     ],
-                    response_format={"type": "text"},
-                    timeout=self.timeout
+                    response_format={"type": "text"}
                 )
                 return response.choices[0].message.content
                 
@@ -124,8 +113,7 @@ class OpenAIService:
                 self.client.chat.completions.create,
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "text"},
-                timeout=self.timeout
+                response_format={"type": "text"}
             )
             return response.choices[0].message.content.split('\n')
         except Exception as e:
@@ -133,7 +121,7 @@ class OpenAIService:
             return ["Could you tell me more about what you understood from the text?"]
 
     def generate_response(self, conversation_history: list) -> str:
-        """Generate response with improved error handling"""
+        """Generate response with improved error handling and token management"""
         system_prompt = '''You are a professional Socratic tutor operating in a law school-like setting. Your role is to:
 
 1. Guide students through critical thinking using questions, never directly providing answers
@@ -155,17 +143,15 @@ Remember: Your goal is to help students develop critical thinking skills through
         
         try:
             # Limit conversation history tokens
-            max_history_tokens = 3000
             current_tokens = sum(self.count_tokens(msg["content"]) for msg in conversation_history)
             
-            if current_tokens > max_history_tokens:
-                # Keep the most recent messages that fit within the token limit
+            if current_tokens > self.max_history_tokens:
                 truncated_history = []
                 current_tokens = self.count_tokens(system_prompt)
                 
                 for msg in reversed(conversation_history):
                     msg_tokens = self.count_tokens(msg["content"])
-                    if current_tokens + msg_tokens <= max_history_tokens:
+                    if current_tokens + msg_tokens <= self.max_history_tokens:
                         truncated_history.insert(0, msg)
                         current_tokens += msg_tokens
                     else:
@@ -179,8 +165,7 @@ Remember: Your goal is to help students develop critical thinking skills through
                 self.client.chat.completions.create,
                 model="gpt-4",
                 messages=messages,
-                response_format={"type": "text"},
-                timeout=self.timeout
+                response_format={"type": "text"}
             )
             return response.choices[0].message.content
         except Exception as e:

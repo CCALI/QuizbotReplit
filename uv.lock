@@ -1067,6 +1067,7 @@ dependencies = [
     { name = "pymupdf" },
     { name = "pypdf2" },
     { name = "streamlit" },
+    { name = "tenacity" },
     { name = "tiktoken" },
 ]
 
@@ -1083,6 +1084,7 @@ requires-dist = [
     { name = "pymupdf", specifier = ">=1.24.13" },
     { name = "pypdf2", specifier = ">=3.0.1" },
     { name = "streamlit", specifier = ">=1.39.0" },
+    { name = "tenacity", specifier = ">=9.0.0" },
     { name = "tiktoken", specifier = ">=0.8.0" },
 ]
 

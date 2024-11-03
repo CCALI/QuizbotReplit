@@ -1,3 +1,4 @@
+import streamlit as st
 from datetime import datetime, timedelta
 from .models import get_db_connection
 import pandas as pd
@@ -20,15 +21,15 @@ class AnalyticsOperations:
         """Update analytics for a single message"""
         conn = get_db_connection()
         cur = conn.cursor()
+        message_content = None  # Initialize the variable
         
         try:
             # Get message content and handle potential None result
             cur.execute("SELECT content FROM messages WHERE id = %s", (message_id,))
             result = cur.fetchone()
-            if not result:
-                return
-                
-            message_content = result[0]
+            if result:
+                message_content = result[0]
+            
             if not message_content:
                 return
                 
