@@ -1,18 +1,11 @@
-import PyPDF2
-import pdfplumber
-import io
 import os
-from datetime import datetime
+import pdfplumber
 import streamlit as st
-from bs4 import BeautifulSoup
 import re
-import fitz  # PyMuPDF for better PDF handling
-import numpy as np
-from PIL import Image
-import hashlib
-from functools import lru_cache
 import concurrent.futures
 import threading
+import hashlib
+from functools import lru_cache
 from typing import Dict, List, Tuple
 import gc
 
@@ -20,11 +13,9 @@ class PDFService:
     def __init__(self):
         self.readings_folder = 'Readings'
         self.supported_formats = ['.pdf']
-        self.math_pattern = re.compile(r'\$.*?\$|\\\[.*?\\\]|\\\(.*?\\\)')
-        self.footnote_pattern = re.compile(r'\[\d+\]|\(\d+\)')
-        self.file_cache: Dict[str, Tuple] = {}
         self.chunk_size = 500
         self.extraction_threads = 4
+        self.file_cache: Dict[str, str] = {}
         self._cache_lock = threading.Lock()
         
     def _calculate_file_hash(self, file_path: str) -> str:
@@ -83,7 +74,6 @@ class PDFService:
             return ""
 
     def _process_pdf_parallel(self, pdf_path: str) -> Tuple[str, List, List, Dict]:
-        """Process PDF pages in parallel with improved memory management"""
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 total_pages = len(pdf.pages)
@@ -116,35 +106,18 @@ class PDFService:
                         # Force garbage collection periodically
                         if completed % 10 == 0:
                             gc.collect()
-                
+                    
                 progress_bar.empty()
                 status_text.empty()
                 
-                # Extract tables and images in parallel
-                tables_future = executor.submit(self.extract_tables, pdf_path)
-                images_future = executor.submit(self.extract_images, pdf_path)
-                
-                tables = tables_future.result()
-                images = images_future.result()
-                
-                # Process footnotes
-                footnotes = {}
-                footnote_matches = self.footnote_pattern.finditer('\n'.join(text_chunks))
-                for match in footnote_matches:
-                    footnote_num = match.group()
-                    footnotes[footnote_num] = {
-                        'page': -1,  # Page number tracking removed for efficiency
-                        'text': match.group()
-                    }
-                
-                return '\n'.join(text_chunks), tables, images, footnotes
+                combined_text = '\n'.join(text_chunks)
+                return combined_text, [], [], {}  # Return empty lists for tables/images/footnotes
                 
         except Exception as e:
             st.error(f"Error processing PDF: {str(e)}")
             return "", [], [], {}
 
     def extract_text_with_formatting(self, folder_path: str) -> Tuple[str, List, List, Dict]:
-        """Extract text from PDFs with improved caching and parallel processing"""
         try:
             if not os.path.exists(folder_path):
                 st.error(f"Readings folder not found: {folder_path}")
@@ -156,68 +129,50 @@ class PDFService:
                 return "", [], [], {}
             
             all_text = []
-            all_tables = []
-            all_images = []
-            all_footnotes = {}
-            
-            total_files = len(pdf_files)
-            overall_progress = st.progress(0)
-            file_status = st.empty()
-            
-            for i, filename in enumerate(pdf_files):
+            for filename in pdf_files:
                 file_path = os.path.join(folder_path, filename)
-                file_status.write(f"Processing {filename} ({i+1}/{total_files})")
-                
                 try:
+                    # Skip empty files
                     if os.path.getsize(file_path) == 0:
                         st.warning(f"Skipping empty file: {filename}")
                         continue
                         
+                    # Check cache
                     file_hash = self._calculate_file_hash(file_path)
                     cache_key = f"{file_hash}_{os.path.getsize(file_path)}"
                     
-                    # Thread-safe cache access
                     with self._cache_lock:
                         if cache_key in self.file_cache:
-                            text, tables, images, footnotes = self.file_cache[cache_key]
-                            file_status.write(f"Retrieved {filename} from cache")
+                            text = self.file_cache[cache_key]
+                            st.info(f"Retrieved {filename} from cache")
                         else:
-                            text, tables, images, footnotes = self._process_pdf_parallel(file_path)
+                            text, _, _, _ = self._process_pdf_parallel(file_path)
                             if text.strip():
-                                self.file_cache[cache_key] = (text, tables, images, footnotes)
+                                self.file_cache[cache_key] = text
                             else:
                                 st.warning(f"No text content found in {filename}")
+                                continue
                     
                     all_text.append(f"\n=== Document: {filename} ===\n")
                     all_text.append(text)
-                    all_tables.extend(tables)
-                    all_images.extend(images)
-                    all_footnotes.update({
-                        f"{filename}:{k}": v for k, v in footnotes.items()
-                    })
                     
+                    # Periodic cache cleanup
+                    if len(self.file_cache) > 10:
+                        with self._cache_lock:
+                            oldest_keys = sorted(self.file_cache.keys())[:-10]
+                            for key in oldest_keys:
+                                del self.file_cache[key]
+                        gc.collect()
+                        
                 except Exception as e:
                     st.error(f"Error processing {filename}: {str(e)}")
                     continue
-                
-                overall_progress.progress((i + 1) / total_files)
-                
-                # Periodic cache cleanup to manage memory
-                if len(self.file_cache) > 10:
-                    with self._cache_lock:
-                        oldest_keys = sorted(self.file_cache.keys())[:-10]
-                        for key in oldest_keys:
-                            del self.file_cache[key]
-                    gc.collect()
-            
-            overall_progress.empty()
-            file_status.empty()
             
             if not all_text:
                 st.error("No text could be extracted from any PDF files")
                 return "", [], [], {}
                 
-            return '\n'.join(all_text), all_tables, all_images, all_footnotes
+            return '\n'.join(all_text), [], [], {}
             
         except Exception as e:
             st.error(f"Error accessing folder {folder_path}: {str(e)}")
@@ -237,45 +192,34 @@ class PDFService:
         current_length = 0
         
         for paragraph in paragraphs:
-            # Check for special content more efficiently
-            special_content = ('__EQUATION__' in paragraph or 
-                             '---' in paragraph or 
-                             '|' in paragraph or 
-                             '•' in paragraph)
-            
-            current_chunk_size = chunk_size // 2 if special_content else chunk_size
-            
-            if special_content or len(paragraph) > current_chunk_size:
+            # Simple length check for splitting
+            if current_length + len(paragraph) > chunk_size:
                 if current_chunk:
                     chunks.append('\n\n'.join(current_chunk))
                     current_chunk = []
                     current_length = 0
                 
-                if len(paragraph) > current_chunk_size:
-                    sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                # Handle long paragraphs
+                if len(paragraph) > chunk_size:
+                    words = paragraph.split()
                     temp_chunk = []
                     temp_length = 0
                     
-                    for sentence in sentences:
-                        sentence_len = len(sentence)
-                        if temp_length + sentence_len > current_chunk_size:
+                    for word in words:
+                        if temp_length + len(word) > chunk_size:
                             if temp_chunk:
                                 chunks.append(' '.join(temp_chunk))
-                            temp_chunk = [sentence]
-                            temp_length = sentence_len
+                            temp_chunk = [word]
+                            temp_length = len(word)
                         else:
-                            temp_chunk.append(sentence)
-                            temp_length += sentence_len
+                            temp_chunk.append(word)
+                            temp_length += len(word) + 1
                     
                     if temp_chunk:
                         chunks.append(' '.join(temp_chunk))
                 else:
-                    chunks.append(paragraph)
-            
-            elif current_length + len(paragraph) + 2 > chunk_size:
-                chunks.append('\n\n'.join(current_chunk))
-                current_chunk = [paragraph]
-                current_length = len(paragraph)
+                    current_chunk = [paragraph]
+                    current_length = len(paragraph)
             else:
                 current_chunk.append(paragraph)
                 current_length += len(paragraph) + 2
