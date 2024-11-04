@@ -34,6 +34,8 @@ if 'show_transcript' not in st.session_state:
     st.session_state.show_transcript = False
 if 'custom_openai_key' not in st.session_state:
     st.session_state.custom_openai_key = None
+if 'show_conversations' not in st.session_state:
+    st.session_state.show_conversations = True
 
 # Load custom CSS
 with open('assets/style.css') as f:
@@ -46,27 +48,24 @@ def start_new_quiz():
 
     try:
         with st.spinner("Processing PDF documents..."):
-            # Extract text from PDFs
             text, tables, images, footnotes = pdf_service.extract_text_with_formatting('Readings')
             if not text:
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Generate title from content
+            # Generate title and create conversation
             title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            
-            # Generate initial summary
             summary = openai_service.generate_summary(text)
-            
-            # Create conversation with meaningful title
             st.session_state.conversation_id = db_ops.create_conversation(
                 st.session_state.user_id,
                 title=title,
                 context=summary
             )
             
+            # Set quiz state
             st.session_state.quiz_started = True
             st.session_state.messages = []
+            st.session_state.show_conversations = False  # Hide conversations
             st.rerun()
             
     except Exception as e:
@@ -74,13 +73,12 @@ def start_new_quiz():
         return False
 
 def continue_conversation(conv_id):
-    """Continue an existing conversation"""
     if st.session_state.user_id:
         st.session_state.conversation_id = conv_id
-        # Load existing messages
         messages = db_ops.get_conversation_messages(conv_id)
-        st.session_state.messages = [(msg[0], msg[1]) for msg in messages]  # (role, content)
+        st.session_state.messages = [(msg[0], msg[1]) for msg in messages]
         st.session_state.quiz_started = True
+        st.session_state.show_conversations = False  # Hide conversations when continuing
         st.rerun()
 
 def main():
@@ -109,7 +107,7 @@ def main():
             with st.form("register_form"):
                 st.info("An OpenAI API key is required to use QuizBot. You can get one at https://platform.openai.com/api-keys")
                 api_key = st.text_input("OpenAI API Key", type="password",
-                                      help="Your personal OpenAI API key for using the QuizBot")
+                                    help="Your personal OpenAI API key for using the QuizBot")
                 new_username = st.text_input("Choose Username")
                 new_password = st.text_input("Choose Password", type="password")
                 first_name = st.text_input("First Name")
@@ -132,14 +130,6 @@ def main():
                         st.error("Registration failed. Username might be taken.")
         return
 
-    # Main application layout
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.title("QuizBot")
-    with col2:
-        if st.button("Start New Quiz", type="primary", key="start_quiz"):
-            start_new_quiz()
-    
     # Add API key management in sidebar
     with st.sidebar:
         with st.expander("Settings", expanded=False):
@@ -171,23 +161,47 @@ def main():
                         st.rerun()
                     else:
                         st.error("Failed to update API key.")
-    
-    # Show conversations
-    conversations = db_ops.get_user_conversations(st.session_state.user_id)
-    if conversations:
-        st.subheader("Your Conversations")
-        for conv in conversations:
-            conv_id, title, context, start_time, end_time, status, msg_count, last_activity = conv
-            with st.container():
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.write(f"**{title}**")
-                    st.write(f"Messages: {msg_count} | Status: {status.title()}")
-                with col2:
-                    if status == 'ongoing' and st.button("Continue", key=f"continue_{conv_id}"):
-                        continue_conversation(conv_id)
+
+    # Main content area
+    if st.session_state.quiz_started and not st.session_state.show_conversations:
+        # Quiz interface
+        st.title(f"Current Quiz")
+        if st.button("Back to Conversations", key="back_to_conversations"):
+            st.session_state.quiz_started = False
+            st.session_state.show_conversations = True
+            st.rerun()
+            
+        # Show current quiz content
+        messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
+        for role, content in messages:
+            with st.chat_message(role):
+                st.write(content)
     else:
-        st.info("Start a new quiz to begin learning!")
+        # Show conversations list
+        st.session_state.show_conversations = True
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.title("QuizBot")
+        with col2:
+            if st.button("Start New Quiz", type="primary", key="start_quiz"):
+                start_new_quiz()
+
+        # Show conversations
+        conversations = db_ops.get_user_conversations(st.session_state.user_id)
+        if conversations:
+            st.subheader("Your Conversations")
+            for conv in conversations:
+                conv_id, title, context, start_time, end_time, status, msg_count, last_activity = conv
+                with st.container():
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**{title}**")
+                        st.write(f"Messages: {msg_count} | Status: {status.title()}")
+                    with col2:
+                        if status == 'ongoing' and st.button("Continue", key=f"continue_{conv_id}"):
+                            continue_conversation(conv_id)
+        else:
+            st.info("Start a new quiz to begin learning!")
 
 if __name__ == "__main__":
     main()
