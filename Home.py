@@ -53,7 +53,7 @@ def start_new_quiz():
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Create conversation
+            # Create conversation with meaningful title
             title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             st.session_state.conversation_id = db_ops.create_conversation(
                 st.session_state.user_id,
@@ -61,25 +61,26 @@ def start_new_quiz():
                 context=text
             )
             
-            # Generate first question without user prompt
-            response = openai_service.generate_response(
-                "Generate an initial Socratic question about the key concepts from these materials.",
-                text
-            )
-            if response:
-                message_id = db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+            # Generate first question
+            initial_prompt = "Based on the provided materials, generate an engaging Socratic question to start our discussion."
+            response = openai_service.generate_response(initial_prompt, text)
             
+            if response:
+                # Save the assistant's first question
+                db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+                st.session_state.messages = [("assistant", response)]
+                st.session_state.quiz_started = True
+                st.session_state.show_conversations = False
+                
                 # Update analytics
                 AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
                 AnalyticsOperations.update_user_analytics(st.session_state.user_id)
-            
-                # Only include the assistant's first question
-                st.session_state.messages = [(response, "assistant")]
-                st.session_state.quiz_started = True
-                st.session_state.show_conversations = False
                 st.rerun()
                 return True
-            
+            else:
+                st.error("Failed to generate initial question. Please try again.")
+                return False
+                
     except Exception as e:
         st.error(f"Error starting quiz: {str(e)}")
         return False
@@ -196,7 +197,6 @@ def main():
 
     # Main content area
     if st.session_state.quiz_started and not st.session_state.show_conversations:
-        # Quiz interface
         st.title("Current Quiz")
         
         # Back to conversations button
@@ -206,10 +206,9 @@ def main():
                 st.session_state.quiz_started = False
                 st.session_state.show_conversations = True
                 st.rerun()
-            
+        
         # Display chat messages
-        for message in st.session_state.messages:
-            role, content = message
+        for role, content in st.session_state.messages:
             with st.chat_message(role):
                 st.write(content)
         
@@ -218,7 +217,7 @@ def main():
             with st.spinner("Processing your response..."):
                 # Save user message
                 message_id = db_ops.save_message(st.session_state.conversation_id, "user", prompt)
-                st.session_state.messages.append((prompt, "user"))
+                st.session_state.messages.append(("user", prompt))
                 
                 # Get conversation context
                 context = db_ops.get_conversation_context(st.session_state.conversation_id)
@@ -227,7 +226,7 @@ def main():
                 response = openai_service.generate_response(prompt, context)
                 if response:
                     db_ops.save_message(st.session_state.conversation_id, "assistant", response)
-                    st.session_state.messages.append((response, "assistant"))
+                    st.session_state.messages.append(("assistant", response))
                 
                 # Update analytics
                 AnalyticsOperations.update_message_analytics(message_id)
