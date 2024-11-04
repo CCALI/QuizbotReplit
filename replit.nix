@@ -19,6 +19,7 @@
     pkgs.harfbuzz
     pkgs.gumbo
     pkgs.freetype
+    pkgs.bash
     pkgs.rustc
     pkgs.libiconv
     pkgs.cargo

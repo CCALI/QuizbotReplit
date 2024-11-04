@@ -66,18 +66,6 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 4. Configure environment variables as described above
 5. Run the application: `streamlit run main.py`
 
-### Replit Setup
-1. Fork the repository on Replit
-2. Add the required secrets in Replit's Secrets tab:
-   - `OPENAI_API_KEY` (if using OpenAI)
-   - `PGDATABASE`
-   - `PGUSER`
-   - `PGPASSWORD`
-   - `PGHOST`
-   - `PGPORT`
-   - `USE_OLLAMA` (optional, for Ollama integration)
-3. Click Run
-
 ## Usage
 1. Place your PDF materials in the Readings folder
 2. Start a new quiz to engage in Socratic dialogue
