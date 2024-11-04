@@ -39,8 +39,6 @@ if 'custom_openai_key' not in st.session_state:
 with open('assets/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
-# Rest of the imports and initialization code...
-
 def main():
     # Authentication
     if not st.session_state.user_id:
@@ -53,32 +51,37 @@ def main():
                 submit = st.form_submit_button("Login")
                 
                 if submit:
-                    success, user_id, first_name, last_name, _ = Auth.verify_user(username, password)
+                    success, user_id, first_name, last_name, api_key = Auth.verify_user(username, password)
                     if success:
                         st.session_state.user_id = user_id
                         st.session_state.user_name = f"{first_name or ''} {last_name or ''}".strip() or username
+                        if api_key:
+                            st.session_state.custom_openai_key = api_key
                         st.rerun()
                     else:
                         st.error("Invalid credentials")
         
         with tab2:
             with st.form("register_form"):
+                st.info("An OpenAI API key is required to use QuizBot. You can get one at https://platform.openai.com/api-keys")
+                api_key = st.text_input("OpenAI API Key", type="password",
+                                      help="Your personal OpenAI API key for using the QuizBot")
                 new_username = st.text_input("Choose Username")
                 new_password = st.text_input("Choose Password", type="password")
                 first_name = st.text_input("First Name")
                 last_name = st.text_input("Last Name")
-                api_key = st.text_input("OpenAI API Key (Optional)", type="password", 
-                                      help="Enter your OpenAI API key if you want to use your own. Leave blank to use system default.")
                 
                 submit = st.form_submit_button("Register")
                 
                 if submit:
-                    # Validate API key if provided
-                    if api_key:
-                        if not openai_service.verify_api_key(api_key):
-                            st.error("Invalid OpenAI API key. Please check and try again.")
-                            return
-                    
+                    if not api_key:
+                        st.error("OpenAI API key is required.")
+                        return
+                        
+                    if not openai_service.verify_api_key(api_key):
+                        st.error("Invalid OpenAI API key. Please check and try again.")
+                        return
+                        
                     if Auth.register_user(new_username, new_password, first_name, last_name, api_key):
                         st.success("Registration successful! Please login.")
                     else:
@@ -90,10 +93,14 @@ def main():
     
     # Add API key management in settings
     with st.expander("Settings"):
+        st.info("Your OpenAI API key is required to use QuizBot")
+        current_key = "•" * 8 if st.session_state.custom_openai_key else "No key set (using system default)"
+        st.text(f"Current API Key: {current_key}")
+        
         new_api_key = st.text_input(
             "Update OpenAI API Key",
             type="password",
-            help="Enter a new OpenAI API key to use your own account. Leave blank to use system default."
+            help="Enter your OpenAI API key to use your own account."
         )
         if st.button("Update API Key"):
             if new_api_key:
@@ -114,8 +121,6 @@ def main():
                     st.rerun()
                 else:
                     st.error("Failed to update API key.")
-
-    # Rest of the main application code...
 
 if __name__ == "__main__":
     main()

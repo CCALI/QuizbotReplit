@@ -1,8 +1,4 @@
 modules = ["python-3.11"]
-
-[nix]
-channel = "stable-24_05"
-
 [workflows]
 runButton = "Project"
 
@@ -32,6 +28,9 @@ waitForPort = 5000
 
 [deployment]
 run = ["sh", "-c", "streamlit run main.py"]
+
+[nix]
+channel = "stable-24_05"
 
 [[ports]]
 localPort = 5000
