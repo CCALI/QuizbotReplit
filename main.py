@@ -39,6 +39,29 @@ if 'custom_openai_key' not in st.session_state:
 with open('assets/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
+def start_new_quiz():
+    """Start a new quiz conversation"""
+    if st.session_state.user_id:
+        # Create a new conversation
+        conversation_id = db_ops.create_conversation(
+            st.session_state.user_id,
+            title=f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        st.session_state.conversation_id = conversation_id
+        st.session_state.quiz_started = True
+        st.session_state.messages = []
+        st.rerun()
+
+def continue_conversation(conv_id):
+    """Continue an existing conversation"""
+    if st.session_state.user_id:
+        st.session_state.conversation_id = conv_id
+        # Load existing messages
+        messages = db_ops.get_conversation_messages(conv_id)
+        st.session_state.messages = [(msg[0], msg[1]) for msg in messages]  # (role, content)
+        st.session_state.quiz_started = True
+        st.rerun()
+
 def main():
     # Authentication
     if not st.session_state.user_id:
@@ -122,8 +145,12 @@ def main():
                         st.rerun()
                     else:
                         st.error("Failed to update API key.")
+
+    # Add Start Quiz button at the top
+    if st.button("Start New Quiz", type="primary", key="start_quiz"):
+        start_new_quiz()
     
-    # Show conversations by default
+    # Show conversations
     conversations = db_ops.get_user_conversations(st.session_state.user_id)
     if conversations:
         st.subheader("Your Conversations")
@@ -135,11 +162,10 @@ def main():
                     st.write(f"**{title}**")
                     st.write(f"Messages: {msg_count} | Status: {status.title()}")
                 with col2:
-                    if st.button("Continue", key=f"continue_{conv_id}"):
-                        st.session_state.conversation_id = conv_id
-                        st.rerun()
+                    if status == 'ongoing' and st.button("Continue", key=f"continue_{conv_id}"):
+                        continue_conversation(conv_id)
     else:
-        st.info("Start a new conversation to begin learning!")
+        st.info("Start a new quiz to begin learning!")
 
 if __name__ == "__main__":
     main()
