@@ -44,7 +44,7 @@ with open('assets/style.css') as f:
 def start_new_quiz():
     if not st.session_state.user_id:
         st.error("Please log in to start a quiz.")
-        return
+        return False
 
     try:
         with st.spinner("Processing PDF documents..."):
@@ -53,33 +53,68 @@ def start_new_quiz():
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Generate title and create conversation
+            # Generate initial message
+            st.session_state.quiz_started = True
+            initial_prompt = f"I have read the following materials and I'm ready to start a Socratic dialogue with you about them. Let's begin with a fundamental question about the key concepts."
+            
+            # Create conversation
             title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-            summary = openai_service.generate_summary(text)
             st.session_state.conversation_id = db_ops.create_conversation(
                 st.session_state.user_id,
                 title=title,
-                context=summary
+                context=text
             )
             
-            # Set quiz state
-            st.session_state.quiz_started = True
-            st.session_state.messages = []
-            st.session_state.show_conversations = False  # Hide conversations
+            # Save initial message
+            message_id = db_ops.save_message(st.session_state.conversation_id, "user", initial_prompt)
+            
+            # Generate first question
+            response = openai_service.generate_response(initial_prompt, text)
+            if response:
+                db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+            
+            # Update analytics
+            AnalyticsOperations.update_message_analytics(message_id)
+            AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+            AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+            
+            st.session_state.messages = [(initial_prompt, "user"), (response, "assistant")]
+            st.session_state.show_conversations = False
             st.rerun()
+            return True
             
     except Exception as e:
         st.error(f"Error starting quiz: {str(e)}")
         return False
 
 def continue_conversation(conv_id):
-    if st.session_state.user_id:
-        st.session_state.conversation_id = conv_id
-        messages = db_ops.get_conversation_messages(conv_id)
-        st.session_state.messages = [(msg[0], msg[1]) for msg in messages]
-        st.session_state.quiz_started = True
-        st.session_state.show_conversations = False  # Hide conversations when continuing
-        st.rerun()
+    """Continue an existing conversation"""
+    try:
+        if st.session_state.user_id:
+            # Verify conversation belongs to user
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM conversations WHERE id = %s AND user_id = %s",
+                (conv_id, st.session_state.user_id)
+            )
+            if not cur.fetchone():
+                st.error("Conversation not found.")
+                return
+            
+            # Set conversation state
+            st.session_state.conversation_id = conv_id
+            messages = db_ops.get_conversation_messages(conv_id)
+            st.session_state.messages = [(msg[0], msg[1]) for msg in messages]
+            st.session_state.quiz_started = True
+            st.session_state.show_conversations = False
+            
+            cur.close()
+            conn.close()
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"Error continuing conversation: {str(e)}")
 
 def main():
     # Authentication
@@ -165,27 +200,58 @@ def main():
     # Main content area
     if st.session_state.quiz_started and not st.session_state.show_conversations:
         # Quiz interface
-        st.title(f"Current Quiz")
-        if st.button("Back to Conversations", key="back_to_conversations"):
-            st.session_state.quiz_started = False
-            st.session_state.show_conversations = True
-            st.rerun()
+        st.title("Current Quiz")
+        
+        # Back to conversations button
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("⬅️ Back", key="back_to_conversations"):
+                st.session_state.quiz_started = False
+                st.session_state.show_conversations = True
+                st.rerun()
             
-        # Show current quiz content
+        # Display chat messages
         messages = db_ops.get_conversation_messages(st.session_state.conversation_id)
-        for role, content in messages:
+        for message in messages:
+            role, content = message[0], message[1]
             with st.chat_message(role):
                 st.write(content)
+        
+        # Chat input
+        if prompt := st.chat_input("Type your response..."):
+            # Save user message
+            message_id = db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+            
+            # Get conversation context
+            context = db_ops.get_conversation_context(st.session_state.conversation_id)
+            
+            # Generate and save assistant response
+            response = openai_service.generate_response(prompt, context)
+            if response:
+                db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+            
+            # Update analytics
+            AnalyticsOperations.update_message_analytics(message_id)
+            AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+            AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+            
+            st.rerun()
     else:
         # Show conversations list
         st.session_state.show_conversations = True
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.title("QuizBot")
+        
+        # Welcome message and start quiz button
+        st.title("Welcome to QuizBot! 🤖")
+        st.write("Ready to start learning? Click the button below to begin a new quiz session.")
+        
+        # Centered Start Quiz button with custom styling
+        col1, col2, col3 = st.columns([2, 1, 2])
         with col2:
-            if st.button("Start New Quiz", type="primary", key="start_quiz"):
+            if st.button("🚀 Start New Quiz", type="primary", key="start_quiz", use_container_width=True):
                 start_new_quiz()
-
+        
+        st.markdown("---")
+        
         # Show conversations
         conversations = db_ops.get_user_conversations(st.session_state.user_id)
         if conversations:
@@ -193,13 +259,22 @@ def main():
             for conv in conversations:
                 conv_id, title, context, start_time, end_time, status, msg_count, last_activity = conv
                 with st.container():
-                    col1, col2 = st.columns([3, 1])
+                    col1, col2, col3 = st.columns([3, 1, 1])
                     with col1:
                         st.write(f"**{title}**")
                         st.write(f"Messages: {msg_count} | Status: {status.title()}")
                     with col2:
-                        if status == 'ongoing' and st.button("Continue", key=f"continue_{conv_id}"):
+                        if status == 'ongoing':
+                            st.write("")  # Spacing
+                            st.write("")  # Spacing
+                            if st.button("▶️ Continue", key=f"continue_{conv_id}"):
+                                continue_conversation(conv_id)
+                    with col3:
+                        st.write("")  # Spacing
+                        st.write("")  # Spacing
+                        if st.button("📋 View", key=f"view_{conv_id}"):
                             continue_conversation(conv_id)
+                st.markdown("---")
         else:
             st.info("Start a new quiz to begin learning!")
 

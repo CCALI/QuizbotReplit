@@ -86,3 +86,21 @@ class OpenAIService:
         except Exception as e:
             print(f"Error generating summary: {str(e)}")
             return None
+
+    def generate_response(self, prompt: str, context: str) -> str:
+        """Generate a response for the quiz dialogue"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a Socratic tutor helping a student understand complex concepts. Ask thought-provoking questions and provide guidance without giving direct answers."},
+                    {"role": "assistant", "content": f"Context: {context[:2000]}..."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating response: {str(e)}")
+            return None

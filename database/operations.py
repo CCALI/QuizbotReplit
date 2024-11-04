@@ -66,6 +66,23 @@ class DatabaseOperations:
         return conversations
 
     @staticmethod
+    def get_conversation_context(conversation_id: int) -> str:
+        """Get the context of a conversation"""
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT context FROM conversations WHERE id = %s",
+            (conversation_id,)
+        )
+        result = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return result[0] if result else ""
+
+    @staticmethod
     def update_conversation(conversation_id: int, title: str = None, context: str = None):
         conn = get_db_connection()
         cur = conn.cursor()

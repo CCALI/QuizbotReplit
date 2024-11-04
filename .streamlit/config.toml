@@ -17,7 +17,3 @@ toolbarMode = "minimal"
 
 [ui]
 hideTopBar = true
-
-[pages]
-"Home" = "main.py"
-"Analytics" = "pages/analytics.py"
