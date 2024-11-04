@@ -52,3 +52,37 @@ class OpenAIService:
         except Exception as e:
             st.error(f"API key verification failed: {str(e)}")
             return False
+
+    def generate_title_summary(self, text: str) -> str:
+        """Generate a concise title based on the content"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Generate a concise, descriptive title (5-10 words) for this text content."},
+                    {"role": "user", "content": text}
+                ],
+                max_tokens=50,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating title: {str(e)}")
+            return None
+
+    def generate_summary(self, text: str) -> str:
+        """Generate a summary of the text content"""
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "Create a concise summary (2-3 sentences) of the main topics and themes in this text."},
+                    {"role": "user", "content": text}
+                ],
+                max_tokens=200,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Error generating summary: {str(e)}")
+            return None

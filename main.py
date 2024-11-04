@@ -40,17 +40,38 @@ with open('assets/style.css') as f:
     st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 def start_new_quiz():
-    """Start a new quiz conversation"""
-    if st.session_state.user_id:
-        # Create a new conversation
-        conversation_id = db_ops.create_conversation(
-            st.session_state.user_id,
-            title=f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        st.session_state.conversation_id = conversation_id
-        st.session_state.quiz_started = True
-        st.session_state.messages = []
-        st.rerun()
+    if not st.session_state.user_id:
+        st.error("Please log in to start a quiz.")
+        return
+
+    try:
+        with st.spinner("Processing PDF documents..."):
+            # Extract text from PDFs
+            text, tables, images, footnotes = pdf_service.extract_text_with_formatting('Readings')
+            if not text:
+                st.error("No PDFs found in the Readings folder.")
+                return False
+            
+            # Generate title from content
+            title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            
+            # Generate initial summary
+            summary = openai_service.generate_summary(text)
+            
+            # Create conversation with meaningful title
+            st.session_state.conversation_id = db_ops.create_conversation(
+                st.session_state.user_id,
+                title=title,
+                context=summary
+            )
+            
+            st.session_state.quiz_started = True
+            st.session_state.messages = []
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"Error starting quiz: {str(e)}")
+        return False
 
 def continue_conversation(conv_id):
     """Continue an existing conversation"""
@@ -112,7 +133,12 @@ def main():
         return
 
     # Main application layout
-    st.title("QuizBot")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("QuizBot")
+    with col2:
+        if st.button("Start New Quiz", type="primary", key="start_quiz"):
+            start_new_quiz()
     
     # Add API key management in sidebar
     with st.sidebar:
@@ -145,10 +171,6 @@ def main():
                         st.rerun()
                     else:
                         st.error("Failed to update API key.")
-
-    # Add Start Quiz button at the top
-    if st.button("Start New Quiz", type="primary", key="start_quiz"):
-        start_new_quiz()
     
     # Show conversations
     conversations = db_ops.get_user_conversations(st.session_state.user_id)
