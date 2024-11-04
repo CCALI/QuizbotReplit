@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import pandas as pd
-from database.analytics import AnalyticsOperations
+from database.models import get_db_connection
 
 def calculate_engagement_score(interactions, words):
     """Calculate engagement score based on chat interactions and word count"""
@@ -21,14 +21,14 @@ def run_analytics_dashboard():
         return
     
     # Get conversation metrics
-    conn = AnalyticsOperations.get_db_connection()
+    conn = get_db_connection()
     cur = conn.cursor()
     
     cur.execute("""
         SELECT 
             c.title,
             COUNT(CASE WHEN m.role = 'user' THEN 1 END) as chat_interactions,
-            SUM(CASE WHEN m.role = 'user' THEN m.word_count ELSE 0 END) as total_words
+            SUM(CASE WHEN m.role = 'user' THEN COALESCE(m.word_count, 0) ELSE 0 END) as total_words
         FROM conversations c
         LEFT JOIN messages m ON c.id = m.conversation_id
         WHERE c.user_id = %s
@@ -47,9 +47,12 @@ def run_analytics_dashboard():
     # Convert to DataFrame
     df = pd.DataFrame(results, columns=['title', 'chat_interactions', 'total_words'])
     
-    # Calculate engagement scores
+    # Handle NULL values in calculations
     df['engagement_score'] = df.apply(
-        lambda x: calculate_engagement_score(x['chat_interactions'], x['total_words']), 
+        lambda x: calculate_engagement_score(
+            x['chat_interactions'] or 0,  # Handle NULL
+            x['total_words'] or 0  # Handle NULL
+        ), 
         axis=1
     )
     
