@@ -1,32 +1,267 @@
-# Content remains the same until line 244
-        # Centered Start Quiz button with custom styling
-        col1, col2, col3 = st.columns([1, 2, 1])  # Changed from [2, 1, 2]
-        with col2:
-            if st.button("🚀 Start New Quiz", type="primary", key="start_quiz", use_container_width=True):
-                start_new_quiz()
+import streamlit as st
+# Set page config before any other Streamlit commands
+st.set_page_config(page_title="QuizBot", layout="wide")
+
+import os
+from datetime import datetime
+from database.models import init_db, get_db_connection
+from database.operations import DatabaseOperations
+from database.analytics import AnalyticsOperations
+from services.openai_service import OpenAIService
+from services.pdf_service import PDFService
+from utils.auth import Auth
+
+# Initialize services
+openai_service = OpenAIService()
+pdf_service = PDFService()
+db_ops = DatabaseOperations()
+
+# Initialize database
+init_db()
+
+# Session state initialization
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'user_name' not in st.session_state:
+    st.session_state.user_name = None
+if 'conversation_id' not in st.session_state:
+    st.session_state.conversation_id = None
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if 'quiz_started' not in st.session_state:
+    st.session_state.quiz_started = False
+if 'show_transcript' not in st.session_state:
+    st.session_state.show_transcript = False
+if 'custom_openai_key' not in st.session_state:
+    st.session_state.custom_openai_key = None
+if 'show_conversations' not in st.session_state:
+    st.session_state.show_conversations = True
+
+# Load custom CSS
+with open('assets/style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+def start_new_quiz():
+    if not st.session_state.user_id:
+        st.error("Please log in to start a quiz.")
+        return False
+
+    try:
+        with st.spinner("Processing PDF documents..."):
+            text, tables, images, footnotes = pdf_service.extract_text_with_formatting('Readings')
+            if not text:
+                st.error("No PDFs found in the Readings folder.")
+                return False
+            
+            # Create conversation
+            title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            st.session_state.conversation_id = db_ops.create_conversation(
+                st.session_state.user_id,
+                title=title,
+                context=text
+            )
+            
+            # Generate first question without user prompt
+            response = openai_service.generate_response(
+                "Generate an initial Socratic question about the key concepts from these materials.",
+                text
+            )
+            if response:
+                message_id = db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+            
+                # Update analytics
+                AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+                AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+            
+                # Only include the assistant's first question
+                st.session_state.messages = [(response, "assistant")]
+                st.session_state.quiz_started = True
+                st.session_state.show_conversations = False
+                st.rerun()
+                return True
+            
+    except Exception as e:
+        st.error(f"Error starting quiz: {str(e)}")
+        return False
+
+def continue_conversation(conv_id):
+    """Continue an existing conversation"""
+    try:
+        if st.session_state.user_id:
+            # Verify conversation belongs to user
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id FROM conversations WHERE id = %s AND user_id = %s",
+                (conv_id, st.session_state.user_id)
+            )
+            if not cur.fetchone():
+                st.error("Conversation not found.")
+                return
+            
+            # Set conversation state
+            st.session_state.conversation_id = conv_id
+            messages = db_ops.get_conversation_messages(conv_id)
+            st.session_state.messages = [(msg[0], msg[1]) for msg in messages]
+            st.session_state.quiz_started = True
+            st.session_state.show_conversations = False
+            
+            cur.close()
+            conn.close()
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"Error continuing conversation: {str(e)}")
+
+def main():
+    # Authentication
+    if not st.session_state.user_id:
+        tab1, tab2 = st.tabs(["Login", "Register"])
         
+        with tab1:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Login")
+                
+                if submit:
+                    success, user_id, first_name, last_name, api_key = Auth.verify_user(username, password)
+                    if success:
+                        st.session_state.user_id = user_id
+                        st.session_state.user_name = f"{first_name or ''} {last_name or ''}".strip() or username
+                        if api_key:
+                            st.session_state.custom_openai_key = api_key
+                        st.rerun()
+                    else:
+                        st.error("Invalid credentials")
+        
+        with tab2:
+            with st.form("register_form"):
+                st.info("An OpenAI API key is required to use QuizBot. You can get one at https://platform.openai.com/api-keys")
+                api_key = st.text_input("OpenAI API Key", type="password",
+                                    help="Your personal OpenAI API key for using the QuizBot")
+                new_username = st.text_input("Choose Username")
+                new_password = st.text_input("Choose Password", type="password")
+                first_name = st.text_input("First Name")
+                last_name = st.text_input("Last Name")
+                
+                submit = st.form_submit_button("Register")
+                
+                if submit:
+                    if not api_key:
+                        st.error("OpenAI API key is required.")
+                        return
+                        
+                    if not openai_service.verify_api_key(api_key):
+                        st.error("Invalid OpenAI API key. Please check and try again.")
+                        return
+                        
+                    if Auth.register_user(new_username, new_password, first_name, last_name, api_key):
+                        st.success("Registration successful! Please login.")
+                    else:
+                        st.error("Registration failed. Username might be taken.")
+        return
+
+    # Add API key management in sidebar
+    with st.sidebar:
+        with st.expander("Settings", expanded=False):
+            st.info("Your OpenAI API key is required to use QuizBot")
+            current_key = "•" * 8 if st.session_state.custom_openai_key else "No key set (using system default)"
+            st.text(f"Current API Key: {current_key}")
+            
+            new_api_key = st.text_input(
+                "Update OpenAI API Key",
+                type="password",
+                help="Enter your OpenAI API key to use your own account."
+            )
+            if st.button("Update API Key"):
+                if new_api_key:
+                    if openai_service.verify_api_key(new_api_key):
+                        if Auth.update_api_key(st.session_state.user_id, new_api_key):
+                            st.session_state.custom_openai_key = new_api_key
+                            st.success("API key updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to update API key.")
+                    else:
+                        st.error("Invalid API key. Please check and try again.")
+                else:
+                    # Remove custom API key
+                    if Auth.update_api_key(st.session_state.user_id, None):
+                        st.session_state.custom_openai_key = None
+                        st.success("Switched to system default API key.")
+                        st.rerun()
+                    else:
+                        st.error("Failed to update API key.")
+
+    # Main content area
+    if st.session_state.quiz_started and not st.session_state.show_conversations:
+        # Quiz interface
+        st.title("Current Quiz")
+        
+        # Back to conversations button
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("⬅️ Back", key="back_to_conversations"):
+                st.session_state.quiz_started = False
+                st.session_state.show_conversations = True
+                st.rerun()
+            
+        # Display chat messages
+        for message in st.session_state.messages:
+            role, content = message
+            with st.chat_message(role):
+                st.write(content)
+        
+        # Chat input
+        if prompt := st.chat_input("Type your response..."):
+            with st.spinner("Processing your response..."):
+                # Save user message
+                message_id = db_ops.save_message(st.session_state.conversation_id, "user", prompt)
+                st.session_state.messages.append((prompt, "user"))
+                
+                # Get conversation context
+                context = db_ops.get_conversation_context(st.session_state.conversation_id)
+                
+                # Generate and save assistant response
+                response = openai_service.generate_response(prompt, context)
+                if response:
+                    db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+                    st.session_state.messages.append((response, "assistant"))
+                
+                # Update analytics
+                AnalyticsOperations.update_message_analytics(message_id)
+                AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+                AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+                
+                st.rerun()
+    else:
+        # Main interface
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.title("QuizBot")
+        with col2:
+            if st.button("Start New Quiz", type="primary", key="start_quiz", use_container_width=True):
+                start_new_quiz()
+
         st.markdown("---")
+        st.subheader("Your Conversations")
         
         # Show conversations
         conversations = db_ops.get_user_conversations(st.session_state.user_id)
         if conversations:
-            st.subheader("Your Conversations")
             for conv in conversations:
                 conv_id, title, context, start_time, end_time, status, msg_count, last_activity = conv
                 with st.container():
-                    col1, col2, col3 = st.columns([2, 1, 1])  # Changed from [3, 1, 1]
+                    col1, col2, col3 = st.columns([3, 1, 1])
                     with col1:
                         st.write(f"**{title}**")
                         st.write(f"Messages: {msg_count} | Status: {status.title()}")
                     with col2:
                         if status == 'ongoing':
-                            st.write("")  # Spacing
-                            st.write("")  # Spacing
                             if st.button("▶️ Continue", key=f"continue_{conv_id}"):
                                 continue_conversation(conv_id)
                     with col3:
-                        st.write("")  # Spacing
-                        st.write("")  # Spacing
                         if st.button("📋 View", key=f"view_{conv_id}"):
                             continue_conversation(conv_id)
                 st.markdown("---")
