@@ -53,10 +53,6 @@ def start_new_quiz():
                 st.error("No PDFs found in the Readings folder.")
                 return False
             
-            # Generate initial message
-            st.session_state.quiz_started = True
-            initial_prompt = f"I have read the following materials and I'm ready to start a Socratic dialogue with you about them. Let's begin with a fundamental question about the key concepts."
-            
             # Create conversation
             title = openai_service.generate_title_summary(text[:2000]) or f"Quiz {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             st.session_state.conversation_id = db_ops.create_conversation(
@@ -65,23 +61,24 @@ def start_new_quiz():
                 context=text
             )
             
-            # Save initial message
-            message_id = db_ops.save_message(st.session_state.conversation_id, "user", initial_prompt)
-            
-            # Generate first question
-            response = openai_service.generate_response(initial_prompt, text)
+            # Generate first question without user prompt
+            response = openai_service.generate_response(
+                "Generate an initial Socratic question about the key concepts from these materials.",
+                text
+            )
             if response:
-                db_ops.save_message(st.session_state.conversation_id, "assistant", response)
+                message_id = db_ops.save_message(st.session_state.conversation_id, "assistant", response)
             
-            # Update analytics
-            AnalyticsOperations.update_message_analytics(message_id)
-            AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
-            AnalyticsOperations.update_user_analytics(st.session_state.user_id)
+                # Update analytics
+                AnalyticsOperations.update_conversation_analytics(st.session_state.conversation_id)
+                AnalyticsOperations.update_user_analytics(st.session_state.user_id)
             
-            st.session_state.messages = [(initial_prompt, "user"), (response, "assistant")]
-            st.session_state.show_conversations = False
-            st.rerun()
-            return True
+                # Only include the assistant's first question
+                st.session_state.messages = [(response, "assistant")]
+                st.session_state.quiz_started = True
+                st.session_state.show_conversations = False
+                st.rerun()
+                return True
             
     except Exception as e:
         st.error(f"Error starting quiz: {str(e)}")
