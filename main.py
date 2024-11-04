@@ -91,36 +91,55 @@ def main():
     # Main application layout
     st.title("QuizBot")
     
-    # Add API key management in settings
-    with st.expander("Settings"):
-        st.info("Your OpenAI API key is required to use QuizBot")
-        current_key = "•" * 8 if st.session_state.custom_openai_key else "No key set (using system default)"
-        st.text(f"Current API Key: {current_key}")
-        
-        new_api_key = st.text_input(
-            "Update OpenAI API Key",
-            type="password",
-            help="Enter your OpenAI API key to use your own account."
-        )
-        if st.button("Update API Key"):
-            if new_api_key:
-                if openai_service.verify_api_key(new_api_key):
-                    if Auth.update_api_key(st.session_state.user_id, new_api_key):
-                        st.session_state.custom_openai_key = new_api_key
-                        st.success("API key updated successfully!")
+    # Add API key management in sidebar
+    with st.sidebar:
+        with st.expander("Settings", expanded=False):
+            st.info("Your OpenAI API key is required to use QuizBot")
+            current_key = "•" * 8 if st.session_state.custom_openai_key else "No key set (using system default)"
+            st.text(f"Current API Key: {current_key}")
+            
+            new_api_key = st.text_input(
+                "Update OpenAI API Key",
+                type="password",
+                help="Enter your OpenAI API key to use your own account."
+            )
+            if st.button("Update API Key"):
+                if new_api_key:
+                    if openai_service.verify_api_key(new_api_key):
+                        if Auth.update_api_key(st.session_state.user_id, new_api_key):
+                            st.session_state.custom_openai_key = new_api_key
+                            st.success("API key updated successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to update API key.")
+                    else:
+                        st.error("Invalid API key. Please check and try again.")
+                else:
+                    # Remove custom API key
+                    if Auth.update_api_key(st.session_state.user_id, None):
+                        st.session_state.custom_openai_key = None
+                        st.success("Switched to system default API key.")
                         st.rerun()
                     else:
                         st.error("Failed to update API key.")
-                else:
-                    st.error("Invalid API key. Please check and try again.")
-            else:
-                # Remove custom API key
-                if Auth.update_api_key(st.session_state.user_id, None):
-                    st.session_state.custom_openai_key = None
-                    st.success("Switched to system default API key.")
-                    st.rerun()
-                else:
-                    st.error("Failed to update API key.")
+    
+    # Show conversations by default
+    conversations = db_ops.get_user_conversations(st.session_state.user_id)
+    if conversations:
+        st.subheader("Your Conversations")
+        for conv in conversations:
+            conv_id, title, context, start_time, end_time, status, msg_count, last_activity = conv
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{title}**")
+                    st.write(f"Messages: {msg_count} | Status: {status.title()}")
+                with col2:
+                    if st.button("Continue", key=f"continue_{conv_id}"):
+                        st.session_state.conversation_id = conv_id
+                        st.rerun()
+    else:
+        st.info("Start a new conversation to begin learning!")
 
 if __name__ == "__main__":
     main()

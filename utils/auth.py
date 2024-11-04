@@ -27,8 +27,25 @@ class Auth:
             # If user has a custom API key, set it in session state
             if result[5]:  # API key is now at index 5
                 st.session_state.custom_openai_key = result[5]
-            return True, result[0], result[2], result[3], result[4]
+            return True, result[0], result[2], result[3], result[5]
         return False, None, None, None, None
+
+    @staticmethod
+    def is_instructor(user_id: int) -> bool:
+        """Check if a user has instructor role"""
+        if not user_id:
+            return False
+            
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+        result = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        return result and result[0] == 'instructor'
 
     @staticmethod
     def register_user(username: str, password: str, first_name: str, last_name: str, openai_api_key: str = None) -> bool:
