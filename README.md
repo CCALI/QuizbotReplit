@@ -51,8 +51,11 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
    # Set these only if using Ollama instead of OpenAI
    USE_OLLAMA=true
    OLLAMA_HOST=http://localhost:11434
-   OLLAMA_MODEL=gemma:2b
+   OLLAMA_MODEL=[insert name of model]
    ```
+
+   #### Note on Models
+   The current chat completions are tailored for OpenAI.  If you are using a local model (llama7b, Mistral7b, etc.) you will have to adjust services/openai_service.py to conform to your model's requirements.
 
 ### Local Setup
 1. Clone the repository
