@@ -48,6 +48,15 @@ Readings/*
 # Streamlit
 .streamlit/secrets.toml
 
+# Replit
+.upm/
+.work-folder-info
+.replit
+replit.nix
+pyproject.toml
+uv.lock
+.cache/
+
 # Misc
 .DS_Store
 .coverage
