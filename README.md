@@ -10,6 +10,7 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 
 ## Features
 - PDF processing with support for complex formatting
+- Concept summarization and caching for efficient quiz generation
 - Socratic dialogue generation using OpenAI GPT-4
 - Student analytics and engagement tracking (1-3 grade scale based on interaction level)
 - Instructor dashboard for content management
@@ -71,10 +72,11 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
 
 ## Usage
 1. Place your PDF materials in the Readings folder
-2. Start a new quiz to engage in Socratic dialogue
-3. View analytics and download conversation transcripts
+2. The system will automatically process PDFs and generate concept summaries
+3. Start a new quiz to engage in Socratic dialogue based on summarized concepts
+4. View analytics and download conversation transcripts
 
-Note: The application will process any PDF files placed in the Readings folder automatically.
+Note: The application will process and summarize any PDF files placed in the Readings folder automatically.
 
 ## Ollama Integration (Alternative to OpenAI)
 
