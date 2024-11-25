@@ -56,7 +56,7 @@ https://law.ou.edu/faculty-and-staff/sean-harrington
    ```
 
    #### Note on Models
-   The current chat completions are tailored for OpenAI.  If you are using a local model (llama7b, Mistral7b, etc.) you will have to adjust services/openai_service.py to conform to your model's requirements.
+   The current chat completions are tailored for OpenAI or Mistral 7b running on Ollama.  If you are using a local model (llama7b, Claude Sonnet, etc.) you will have to adjust services/openai_service.py to conform to your model's requirements.
 
 ### Local Setup
 1. Clone the repository
