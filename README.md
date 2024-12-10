@@ -96,7 +96,7 @@ QuizBot can be configured to use Ollama as an alternative to OpenAI for local LL
 
 2. Pull the required model:
    ```bash
-   ollama pull gemma:2b
+   ollama pull mistral:7b
    ```
 
 3. Install Python dependencies:
